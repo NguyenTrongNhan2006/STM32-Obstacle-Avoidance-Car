@@ -1,5 +1,7 @@
 # Đề xuất cho xe né vật cản
 
+[Về mục lục](README.md) · [Hướng dẫn triển khai chi tiết](IMPLEMENTATION_GUIDE.md) · [Kiểm thử](TEST_PLAN.md)
+
 Đây là phương án để tác giả cân nhắc, chưa chốt BOM, pinout hoặc thông số vận hành. Sườn driver trong `Firmware/` chỉ có `// TO DO`; chưa có firmware hoạt động. Tất cả thiết kế dưới đây là đề xuất để thảo luận, chưa phải quyết định triển khai.
 
 Tác giả đã nêu MPU6050, cảm biến "HR-04" và buzzer. Tạm hiểu "HR-04" là HC-SR04 để đặt tên sườn driver; cần kiểm tra chữ in trên module trước khi viết driver. TB6612FNG và hai cảm biến IR vẫn là đề xuất bổ sung, chưa được xác nhận.
@@ -36,7 +38,9 @@ MPU6050: dùng [register map của TDK InvenSense](https://invensense.tdk.com/wp
 - `STOP`: dừng khi phát hiện vật cản.
 - `TURN_LEFT` / `TURN_RIGHT`: chọn hướng theo dữ liệu hai bên, thử quay trong khoảng thời gian giới hạn.
 - `CHECK`: đọc lại khoảng cách sau khi quay rồi mới tiến.
-- `FAULT`: dừng/cảnh báo khi lỗi cảm biến, quá số lần né, nghiêng quá mức hoặc nhấn STOP; cần thao tác chủ động để chạy lại.
+- `FAULT`: dừng/cảnh báo khi lỗi cảm biến, quá số lần né hoặc nghiêng quá mức; lỗi phải hết và có thao tác xác nhận trước khi trở về `IDLE`.
+
+Nút STOP được ưu tiên ở mọi trạng thái và đưa xe về `IDLE`; nút STOP không tự nó là lỗi hệ thống. Bảng chuyển trạng thái cụ thể nằm trong [hướng dẫn triển khai, mục 7](IMPLEMENTATION_GUIDE.md#7-ghép-hành-vi-xe). Nếu còn lỗi đang hiện diện, giữ yêu cầu dừng và không cho START vượt qua lỗi.
 
 Đây là các trạng thái đề xuất, chưa có mã triển khai. Không cho lùi tự động ở bản đầu khi chưa có cảm biến phía sau. Cần thử nghiệm phạm vi quét của thân xe khi quay; cảm biến phía trước không bảo đảm hai bên hoặc phía sau trống.
 

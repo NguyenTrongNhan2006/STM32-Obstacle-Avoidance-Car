@@ -6,8 +6,16 @@ Xe dự kiến phát hiện vật cản, dừng và lựa chọn hướng né. K
 
 ## Tài liệu
 
-- [Cấu trúc firmware và nhiệm vụ từng file](FIRMWARE_GUIDE.md)
-- [Đề xuất phần cứng, hành vi và thứ tự triển khai](PROJECT_PLAN.md)
+Đọc theo thứ tự sau. Mỗi tài liệu trả lời một nhóm câu hỏi để bạn tự triển khai mà không phải đoán vai trò của sườn file.
+
+| Thứ tự | Tài liệu | Bạn sẽ tìm thấy |
+| --- | --- | --- |
+| 1 | [Ý tưởng và phạm vi dự án](PROJECT_PLAN.md) | Linh kiện đã nêu, phần còn đề xuất, hành vi xe và hướng mở rộng |
+| 2 | [Cấu trúc firmware và nhiệm vụ từng file](FIRMWARE_GUIDE.md) | Vai trò `.c/.h`, 13 bộ driver, lớp App, Core và Config |
+| 3 | [Hướng dẫn tự triển khai từng bước](IMPLEMENTATION_GUIDE.md) | Chuẩn bị VS Code/Git, lập pinout, tạo build, thứ tự viết module và tiêu chí hoàn thành từng mốc |
+| 4 | [Kế hoạch kiểm thử](TEST_PLAN.md) | 16 ca kiểm tra, cách ghi kết quả, gợi ý tìm lỗi và quy ước sơ đồ/ảnh |
+
+**Bắt đầu ở đâu?** Đọc mục 1–4 của hướng dẫn triển khai, chốt board/linh kiện rồi làm mốc A (khởi động, GPIO, timebase, UART). Chỉ chuyển sang motor và cảm biến sau khi xác nhận nền tảng hoạt động. Những mục ghi “chưa chốt” do tác giả tự quyết định; không phải thông số mặc định.
 
 ## Quy ước ở giai đoạn này
 
@@ -28,13 +36,4 @@ cd STM32-Obstacle-Avoidance-Car
 code .
 ```
 
-Sau khi tự triển khai một phần:
-
-```sh
-git status
-git add Firmware About Images
-git commit -m "Implement selected module"
-git push origin main
-```
-
-Thay nội dung commit cho đúng phần bạn đã làm. Không ghi nhận kết quả thử nghiệm trước khi kiểm tra trên phần cứng.
+Các bước tạo branch, kiểm tra diff, commit và push nằm trong [hướng dẫn triển khai, mục 2 và 8](IMPLEMENTATION_GUIDE.md). Dùng đúng branch đang làm và thay nội dung commit cho đúng phần bạn đã triển khai. Không ghi nhận kết quả thử nghiệm trước khi kiểm tra trên phần cứng.

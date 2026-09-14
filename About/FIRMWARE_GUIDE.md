@@ -1,5 +1,7 @@
 # Firmware — sườn để tự triển khai
 
+[Về mục lục](README.md) · [Các bước tự triển khai](IMPLEMENTATION_GUIDE.md) · [Kế hoạch kiểm thử](TEST_PLAN.md)
+
 Mỗi file `.c/.h` trong `Firmware/` chỉ chứa `// TO DO`. Tên module thể hiện cách chia công việc dự kiến, không có nghĩa đã hỗ trợ phần cứng hoặc có API chạy được. `CMakeLists.txt` chỉ chứa `# TO DO`; chưa thể build/nạp. Mọi hướng dẫn nằm trong `About/` để phần firmware dành hoàn toàn cho tác giả tự triển khai.
 
 ## Cấu trúc
@@ -20,6 +22,8 @@ Firmware/
 ```
 
 Mỗi module bên dưới có một cặp `.c` / `.h` chỉ chứa dòng TODO.
+
+Ví dụ đường dẫn đầy đủ: `Drivers/MCAL/Inc/gpio.h` và `Drivers/MCAL/Src/gpio.c` tính từ `Firmware/`. Quy tắc tương tự áp dụng cho tất cả module MCAL/Devices; các module ứng dụng nằm ở `App/Inc/` và `App/Src/`. Có 6 cặp MCAL + 7 cặp Devices + 4 cặp App + 2 cặp Core + 2 header Config = **40 file `.c/.h`**. Số file chỉ mô tả sườn, không phải số tính năng đã hoạt động.
 
 ## Drivers/MCAL — ngoại vi STM32
 
@@ -65,6 +69,17 @@ Tên driver phần cứng là đề xuất, chưa phải danh sách linh kiện 
 - `app_config.h`: tốc độ PWM, khoảng cách dừng, hysteresis, timeout, ngưỡng nghiêng; chưa điền giá trị.
 
 Hướng phụ thuộc dự kiến: `Core → App → Devices → MCAL`. Cấu hình được chia sẻ qua `Config/`. Tránh đưa thuật toán né vào driver cảm biến.
+
+Đây là hướng phân lớp chính; `Core` vẫn phải khởi tạo nền tảng và chuyển sự kiện ngắt đến module sở hữu ngoại vi. Không nên làm một lớp bọc chỉ để tuân theo mũi tên nếu không giúp phân chia trách nhiệm.
+
+| Khi cần thay đổi | Nơi dự kiến chỉnh | Nơi không nên chứa quyết định này |
+| --- | --- | --- |
+| Đổi dây, chân timer, mức kích hoạt | `board_config.h` và phần cấu hình ngoại vi tương ứng | Thuật toán né |
+| Đổi ngưỡng dừng/thời gian quay | `app_config.h` và ghi lý do thử nghiệm trong About | Driver I2C/GPIO |
+| Đổi loại cầu H | Driver Devices cho loại thực tế; giữ hợp đồng motor với App nếu phù hợp | Driver cảm biến |
+| Lỗi giao dịch I2C | `i2c` trả trạng thái; `mpu6050` truyền lỗi lên | MCAL tự quyết định xe rẽ |
+| Một cảm biến quá hạn | `sensor_manager` xác định tuổi mẫu; `safety_monitor` áp dụng chính sách | Tự sửa mẫu thành số đo giả |
+| Chọn trái/phải | `obstacle_avoidance` dựa trên dữ liệu đã kiểm tra | ISR hoặc GPIO |
 
 ## Việc tiếp theo
 
