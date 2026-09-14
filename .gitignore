@@ -1,0 +1,10 @@
+Firmware/build/
+Firmware/build-*/
+*.o
+*.elf
+*.bin
+*.hex
+*.map
+*.log
+Thumbs.db
+.DS_Store

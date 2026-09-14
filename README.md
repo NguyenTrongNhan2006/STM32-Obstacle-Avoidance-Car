@@ -1,2 +1,7 @@
-# STM32-Obstacle-Avoidance-Car
-STM32F103 obstacle avoidance robot car — project scaffold by Nguyen Trong Nhan.
+# STM32 Obstacle Avoidance Car
+
+Nguyễn Trọng Nhân — STM32F103 project, concept stage.
+
+[Giới thiệu, hướng dẫn và ý tưởng dự án](About/README.md).
+
+Copyright (c) 2026 Nguyễn Trọng Nhân. All rights reserved. See [LICENSE](LICENSE).
