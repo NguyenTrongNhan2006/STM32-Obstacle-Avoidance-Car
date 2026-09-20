@@ -1,28 +1,8 @@
-# Hướng dẫn tự triển khai từng bước
+# Hướng dẫn triển khai cho Nhân và Hưng
 
-[Về mục lục](README.md) · [Vai trò các file](FIRMWARE_GUIDE.md) · [Kế hoạch dự án](PROJECT_PLAN.md) · [Kiểm thử](TEST_PLAN.md)
+## 1. Chuẩn bị bản làm việc
 
-Tài liệu này mô tả công việc để Nguyễn Trọng Nhân tự thiết kế và viết firmware. Toàn bộ file `.c/.h` hiện chỉ có `// TO DO`; không có API hoặc cấu hình đã triển khai. Các mốc dưới đây là kế hoạch, chưa có mốc nào được xác nhận chạy trên phần cứng.
-
-## 1. Chốt phạm vi trước khi viết
-
-| Hạng mục | Thông tin hiện có | Việc cần tự xác nhận |
-| --- | --- | --- |
-| Vi điều khiển | Dự án dự kiến STM32F103 | Mã chip, board, bộ nhớ và nguồn clock thực tế |
-| MPU6050 | Tác giả đã nêu | Module cụ thể, hướng lắp và dùng để phát hiện nghiêng hay điều khiển từ xa |
-| Cảm biến khoảng cách | Tác giả ghi “HR-04” | Kiểm tra nhãn; tên `ultrasonic_hcsr04` đang tạm theo HC-SR04 |
-| Buzzer | Tác giả đã nêu | Loại active/passive, điện áp, dòng và mạch kích |
-| Motor/cầu H | Chưa chốt | Mã motor, điện áp, dòng kẹt; TB6612FNG chỉ là phương án |
-| IR trái/phải | Chưa xác nhận có | Có dùng hay bỏ qua ở bản đầu |
-| Công cụ | Tự lựa chọn | HAL, LL hoặc thanh ghi; compiler, công cụ nạp/debug |
-
-Nếu chỉ có cảm biến phía trước, bản đầu có thể dừng rồi thử quay theo một quy tắc cố định, có giới hạn thời gian/số lần và đo lại trước khi đi tiếp. Khi đó **chưa có thông tin xác nhận bên trái/phải trống**. Không dùng dữ liệu IR giả để làm như hai cảm biến đã tồn tại.
-
-Đề xuất MPU6050 gắn trên xe để phát hiện nghiêng là một hướng nghiên cứu. Điều khiển bằng nghiêng tay là phạm vi khác: cần bộ điều khiển và đường truyền riêng. Chưa triển khai cả hai cùng lúc.
-
-## 2. Chuẩn bị bản làm việc
-
-Trong terminal VS Code, nếu chưa có repo:
+Cần Git, VS Code, CMake >= 3.22, Ninja và Arm GNU Toolchain có `arm-none-eabi-gcc`, `arm-none-eabi-size`, `arm-none-eabi-nm`. Nạp/debug cần ST-Link và công cụ phù hợp như STM32CubeProgrammer; repo chưa cung cấp launch.json/debug profile đã kiểm chứng.
 
 ```sh
 git clone https://github.com/NguyenTrongNhan2006/STM32-Obstacle-Avoidance-Car.git
@@ -30,110 +10,89 @@ cd STM32-Obstacle-Avoidance-Car
 code .
 ```
 
-Nếu đã clone, chạy `git status` trước. Khi còn thay đổi chưa lưu vào Git, commit hoặc cất chúng trước khi cập nhật. Khi thư mục làm việc sạch:
+Nếu đã clone, kiểm tra `git status`, commit/cất thay đổi cá nhân trước khi chạy `git pull --ff-only`. Không force push để giải quyết phân kỳ. Mỗi người làm một feature branch; ví dụ `feature/nhan-pwm` và `feature/hung-mpu6050`.
+
+## 2. Build và kiểm tra
+
+Chạy trong thư mục `Firmware/`; thêm CMake, Ninja và Arm GNU Toolchain vào PATH:
 
 ```sh
-git pull --ff-only
-git switch -c feature/board-bringup
+cmake --preset debug
+cmake --build --preset debug
+arm-none-eabi-size build/debug/obstacle_car.elf
+cmake --preset release
+cmake --build --preset release
 ```
 
-Tên branch là ví dụ cho giai đoạn khởi động board. Nếu `pull --ff-only` báo hai nhánh đã phân kỳ, kiểm tra lịch sử và xử lý merge/rebase có chủ đích; không dùng force push để chữa lỗi này.
+Chạy script bằng **Git Bash** trên Windows hoặc Bash trên Linux, vẫn ở `Firmware/`:
 
-VS Code chỉ là nơi soạn thảo. Repo hiện chưa có startup, linker script, toolchain hoàn chỉnh hay cấu hình debug; mở được thư mục không đồng nghĩa build được.
+```sh
+test -f build/debug/obstacle_car.elf
+bash tools/check_constraints.sh build/debug/obstacle_car.elf
+```
 
-## 3. Lập bảng phần cứng và tài nguyên
+Phải có ELF và phần “Build” được kiểm tra. Script hiện có thể báo “Tat ca dat.” sau khi bỏ qua ELF không tồn tại; không nhận kết quả đó làm bằng chứng build. Nếu thiếu `dirname/grep/find`, dùng Git Bash đầy đủ (có /usr/bin trong PATH), không sửa script để bỏ kiểm tra.
 
-Sao chép bảng này vào ghi chú thiết kế trong `About/`, rồi tự điền sau khi đối chiếu board và datasheet. “Chưa chốt” không phải giá trị để đưa vào code.
+Kết quả: `build/debug/obstacle_car.elf`, `.hex`, `.bin`, `.elf.map`; bản release tương tự. File .su ghi stack ước tính của từng hàm. Không commit build artifact vào repo. [Biên bản build](BUILD_VERIFICATION.md) ghi kết quả của skeleton này.
 
-| Tín hiệu | Chân MCU | Ngoại vi/kênh | Mức điện áp/cực tính | Module sở hữu |
-| --- | --- | --- | --- | --- |
-| PWM motor trái/phải | Chưa chốt | Timer/kênh chưa chốt | Chưa chốt | `pwm` |
-| Hướng motor / standby | Chưa chốt | GPIO | Chưa chốt | `motor_tb6612` hoặc driver thay thế |
-| Trigger / Echo | Chưa chốt | GPIO + bộ đo thời gian | Chưa chốt | `ultrasonic_hcsr04` |
-| SDA / SCL | Chưa chốt | I2C | Pull-up và mức logic chưa chốt | `i2c` |
-| IR trái/phải, nếu có | Chưa chốt | GPIO/EXTI | Chưa chốt | `ir_obstacle` |
-| START/STOP | Chưa chốt | GPIO/EXTI | Chưa chốt | `button` |
-| LED / buzzer | Chưa chốt | GPIO/PWM tùy linh kiện | Chưa chốt | `status_led`, `buzzer` |
-| UART debug | Chưa chốt | USART | Chưa chốt | `uart_debug` |
-| Nạp/debug | Theo board thực tế | SWD | Theo board thực tế | Công cụ nạp |
+Project sources dùng `-Wall -Wextra -Wpedantic -Wshadow -Wdouble-promotion`. CMake hiện giữ `-w` cho vendor để không chỉnh mã bên thứ ba. Cần đọc lỗi đầu tiên của compiler/linker, không thêm source thư viện tùy ý để “cho qua”.
 
-Ghi thêm nguồn clock, tần số bộ đếm và đơn vị thời gian cho mỗi timer. Tránh để driver tự cấu hình lại một timer đang phục vụ module khác. Nếu dùng chung, phải thiết kế rõ phần cấu hình chung và quyền thay đổi của từng module.
+## 3. Bring-up lần đầu trên board — chưa thực hiện
 
-Với Echo, có thể cân nhắc timer input capture hoặc EXTI kết hợp đọc bộ đếm thời gian. EXTI chỉ báo cạnh, không tự cung cấp độ rộng xung. Input capture và PWM là các chế độ timer cần đối chiếu trong [RM0008 của ST](https://www.st.com/en/microcontrollers-microprocessors/stm32f103/documentation.html). Sườn hiện chưa có driver capture riêng; nếu chọn cách này, tự xác định interface đo xung trước khi mở rộng MCAL.
+1. Đối chiếu board_config với schematic và linh kiện thật. Kiểm tra HSE 8 MHz, 3.3 V, GND, Echo level shifting, pull-down STBY. Chưa cấp nguồn motor.
+2. Nạp ELF/HEX bằng ST-Link. Nếu MCU khác mã C8 hoặc clock khác, dừng để sửa cấu hình có bằng chứng.
+3. Breakpoint ở main và sau SystemClock_Config; kiểm tra SystemCoreClock = 72 MHz. Nếu assert, xem `g_assert_file/g_assert_line`; không tắt assert để né lỗi.
+4. Quan sát STBY luôn thấp. UART 115200 8N1 dự kiến in “Skeleton: motor disabled, algorithms TODO”.
+5. Xác nhận SysTick chạy trước scheduler (HAL timeout còn tiến), và sau scheduler cả HAL tick/kernel tick vẫn tăng với tần số dự kiến.
+6. Kiểm tra debugger thấy năm Task ứng dụng, Idle, timer service. tSafety/tSensor/tDecision/tLog/tBuzzer hiện chỉ chờ 100 ms; không mong xe tự chạy.
+7. Ghi board revision, commit SHA, công cụ, nguồn cấp và kết quả vào biên bản. Chỉ sau khi đạt mới nối từng driver thật.
 
-## 4. Tạo project tối thiểu có thể build/nạp
+Nếu HSE không khởi động, HAL timeout rồi assert là hành vi dự kiến. Không sửa vòng chờ thành vô hạn để che mất lỗi clock. Mọi peripheral IRQ ngoài SysTick đang trap; phải triển khai route và clear pending trước khi bật nguồn ngắt.
 
-1. Xác nhận chính xác mã MCU rồi chọn device headers/CMSIS, startup và linker script tương ứng.
-2. Chọn một hướng HAL, LL hoặc thanh ghi để bắt đầu. MCAL trong repo là lớp do bạn tự viết; không phải thư viện STM32 đã được cung cấp.
-3. Nếu sinh project bằng công cụ của ST, tạo ở thư mục thử nghiệm riêng trước; kiểm tra cách ghép với sườn hiện tại. Tránh có hai `main.c`, hai vector table hoặc hai handler cùng tên trong danh sách build.
-4. Hoàn thiện `Firmware/CMakeLists.txt` và các file build cần thiết: compiler cho MCU, danh sách nguồn, include paths, linker và đầu ra. File CMake hiện chỉ chứa `# TO DO`, nên chưa có lệnh build dùng ngay.
-5. Cấu hình nạp/debug và kiểm tra breakpoint tại điểm vào chương trình. Giữ motor ở trạng thái dừng trong lúc kiểm tra board.
-6. Ghi tên/phiên bản công cụ và các bước đã chạy thành công vào `About/`. Giữ thông báo bản quyền của thư viện bên thứ ba khi thêm vào repo.
+## 4. Quy trình triển khai một module
 
-**Hoàn thành mốc này khi:** tạo được đầu ra firmware, nạp được, debug được và xác nhận chương trình thực sự chạy trên board. Chưa cần đọc cảm biến hoặc chạy xe.
+1. Owner đọc hợp đồng .h và input/output/timeout hiện tại.
+2. Chốt phần cứng và đơn vị dữ liệu với người review; sửa shared header trước nếu cần.
+3. Thay TODO trong .c; giữ trả lỗi tường minh. Không dùng NOT_READY để giả lập số đo hợp lệ.
+4. Build cả Debug/Release, chạy constraints; thêm test có ý nghĩa cho logic mới.
+5. Thử riêng trên bench, chụp waveform/log; ghi case lỗi và thời gian tối đa.
+6. PR nhỏ, người còn lại review, rồi tích hợp vào đúng Task. Không cùng sửa main/config trong hai PR đang mở.
 
-## 5. Viết từng lớp theo thứ tự
+Không đồng loạt nối tất cả TODO vào Task. Sau từng module, giữ điểm mốc build được và kiểm tra đường STOP còn hoạt động.
 
-Với mỗi module: chốt đầu vào/đầu ra → viết interface trong `.h` → triển khai trong `.c` → thử riêng → ghi kết quả → mới ghép vào App. Không cần điền tất cả file cùng lúc.
+## 5. Các mốc kỹ thuật
 
-| Mốc | File/module cần làm | Việc tự triển khai | Điều kiện chuyển bước |
+| Mốc | Nhân | Hưng | Điều kiện chuyển mốc |
 | --- | --- | --- | --- |
-| A. Nền tảng | `Core`, `gpio`, `timebase`, `uart_debug` | Khởi động, đọc/ghi chân, lịch thời gian và log | LED hoạt động; log có mốc thời gian; vòng lặp không bị chờ vô hạn |
-| B. Điều khiển cơ bản | `button`, `status_led` | Chống dội; tách mức chân và sự kiện nhấn; báo trạng thái | Mỗi lần nhấn tạo đúng sự kiện mong muốn; STOP được ưu tiên |
-| C. Motor | `pwm`, `motor_tb6612` hoặc loại thực tế | Ánh xạ bánh trái/phải, hướng, giới hạn lệnh, dừng | Thử từng bánh khi kê xe; reset/STOP đưa motor về trạng thái đã định nghĩa |
-| D. Khoảng cách | `ultrasonic_hcsr04` | Trigger, nhận Echo, đo xung, timeout, đơn vị khoảng cách | So sánh với thước; mất Echo trả lỗi hữu hạn, không treo chương trình |
-| E. IR nếu có | `exti`, `ir_obstacle` | Cực tính, sự kiện hai bên, lọc nhiễu | Xác định đúng trái/phải; ngắt không làm vòng lặp bị đói thời gian |
-| F. MPU6050 | `i2c`, `mpu6050` | Kiểm tra kết nối, cấu hình chế độ đo, đọc dữ liệu, hiệu chuẩn | Dữ liệu có ý nghĩa khi đặt yên/nghiêng; ngắt kết nối được báo lỗi |
-| G. Gom cảm biến | `sensor_manager` | Gói dữ liệu gồm giá trị, đơn vị, thời điểm và trạng thái hợp lệ | Nhận biết dữ liệu mới, quá hạn và lỗi; không coi thiếu cảm biến là đường trống |
-| H. Điều kiện chạy | `safety_monitor` | Quyền cho phép chạy, STOP, lỗi và điều kiện phục hồi | Lệnh tiến không vượt qua được yêu cầu dừng |
-| I. Né vật cản | `obstacle_avoidance`, `robot_car` | Trạng thái, quyết định hướng, timeout quay, số lần thử | Mỗi trạng thái có điều kiện thoát; mọi lỗi đưa xe về dừng theo thiết kế |
-| J. Cảnh báo | `buzzer` | Mẫu còi theo trạng thái | Còi không giữ CPU trong một vòng chờ làm trễ STOP/cảm biến |
+| A — nền | Xác minh clock, RTOS, GPIO, SWD | Xác minh UART và sơ đồ nguồn/sensor | Boot ổn, motor tắt, ghi build + board evidence |
+| B — MCAL | PWM TIM3, EXTI8, TIM2 capture | I2C1 + lỗi/timeout, định dạng log | Chứng minh ngoại vi riêng, chưa chạy FSM |
+| C — Devices | Cầu H, button, LED trên giá đỡ | HC-SR04, MPU6050, buzzer | Có mẫu hợp lệ và trạng thái lỗi phân biệt |
+| D — dữ liệu | Safety event contract | Hai mailbox, timestamp, stale detection inputs | Nhiều consumer đọc không mất mẫu |
+| E — ứng dụng | FSM deadline và một output boundary | Sensor scheduling + fault injection | STOP/fault thắng motion; không tự restart |
+| F — xe cơ bản | Điều khiển ở tốc độ thấp | Đo range/tilt/log và false alarm | Qua checklist xe cơ bản trước 07/11 |
+| G — mở rộng | Gyro-assisted turn nếu đủ điều kiện | Bias/relative angle + plot telemetry | Có số liệu so sánh với baseline |
+| H — hoàn thiện | Regression, memory, release | Soak, dữ liệu, video và báo cáo | Freeze tính năng 05/12; bàn giao 20/12 |
 
-Trong `mpu6050`, đối chiếu thanh ghi nhận dạng, cấu hình thang đo và dữ liệu với [register map TDK InvenSense](https://invensense.tdk.com/wp-content/uploads/2015/02/MPU-6000-Register-Map.pdf). Không sao chép nguyên giá trị thanh ghi từ một module khác khi chưa hiểu ý nghĩa. Việc quyết định “nghiêng quá mức thì dừng” thuộc `safety_monitor`, không thuộc lớp I2C.
+Việc bật I2C/TIM thật cần thêm HAL module hoặc cách triển khai ngoại vi đã thống nhất; HAL config hiện chưa bật hai nhóm này. Đó là công việc của mốc B, không phải tính năng đã có trong skeleton.
 
-## 6. Chốt hợp đồng module bằng lời trước khi viết API
+## 6. Quy tắc timing và ngắt
 
-Với mỗi cặp `.c/.h`, tự trả lời các câu sau trong ghi chú thiết kế:
+- Với periodic work dùng delay-until để giảm trôi chu kỳ; nhiều tốc độ sensor dùng deadline riêng. Vòng chờ 100 ms hiện chỉ là placeholder.
+- Thời lượng TURN là deadline trong context; không sleep toàn bộ thời gian quay, vì cần tiếp tục xét STOP/fault.
+- So sánh thời gian unsigned theo elapsed để xử lý tick wrap. Timeout của giao dịch và độ mới của mẫu là hai điều kiện khác nhau.
+- ISR chỉ capture/timestamp/notify/clear pending rồi yield nếu cần. Không chạy I2C, formatter, lọc IMU hoặc FSM trong ISR.
+- Priority CMSIS có số càng nhỏ càng khẩn cấp. ISR gọi API RTOS FromISR phải dùng số 5..15 và grouping 4; 0..4 không được gọi RTOS.
+- SVC/PendSV do port sở hữu; không thêm wrapper C. SysTick tăng HAL tick một lần rồi forward vào kernel sau khi scheduler chạy.
+- Trước khi cho motor chạy phải thống nhất shutdown khi tDecision bị treo/trễ. Callback chỉ bảo vệ lúc gọi motor_apply; cân nhắc đường inhibit phần cứng/ISR tối thiểu và watchdog ở PR an toàn, đo bằng waveform. Skeleton chưa thực hiện cơ chế đó.
 
-- Ai gọi module? Có được gọi từ ISR không, hay chỉ từ vòng lặp chính?
-- Đầu vào dùng đơn vị gì và phạm vi nào? Dữ liệu ngoài phạm vi bị từ chối hay giới hạn?
-- Lời gọi hoàn thành ngay, chờ có giới hạn, hay cần cập nhật nhiều lần?
-- Kết quả phân biệt thành công, đang chờ, timeout và lỗi thế nào?
-- Ai sở hữu timer, bus và dữ liệu dùng chung? Dữ liệu ISR/main trao đổi theo cơ chế nào?
-- Khởi tạo thất bại thì ứng dụng có được chạy motor không? Cần thao tác gì để phục hồi?
+## 7. Quy tắc bộ nhớ và log
 
-Ví dụ thiết kế bằng lời: một mẫu khoảng cách cần có **giá trị + đơn vị + thời điểm lấy mẫu + trạng thái**. Mất Echo không nên biến thành “0 mm” hoặc một khoảng cách rất xa rồi được dùng như phép đo hợp lệ. Tên kiểu dữ liệu và hàm cụ thể do bạn tự thiết kế.
+Chỉ dùng cấp phát static; không thêm heap implementation, libc formatting hoặc HAL busy delay. Queue dài 1 giữ mẫu mới nhất theo bản copy, không trỏ vào stack của producer. Không tự đổi sample enum/đơn vị giữa hai nhánh.
 
-ISR nên chỉ ghi nhận sự kiện/chụp thời gian và xử lý cờ theo ngoại vi. Tránh chạy thuật toán né, in log dài hoặc chờ I2C trong ISR. Khi chia sẻ một nhóm dữ liệu giữa ISR và main, cần bảo đảm main không đọc trúng bản đang cập nhật dở; chỉ thêm `volatile` chưa giải quyết tính nhất quán của cả nhóm dữ liệu.
+Đo high-water mark của từng Task khi test lỗi, cộng call depth ISR/MSP và log. Stack overflow hook là chốt chẩn đoán cuối cùng, không thay cho việc đo. Timer callback không được block; UART runtime chỉ có tLog ghi.
 
-## 7. Ghép hành vi xe
+## 8. Review và tích hợp
 
-Đề xuất ưu tiên: **STOP/lỗi bắt buộc dừng → dữ liệu cảm biến hợp lệ → quyết định né → lệnh motor**. Chọn một nơi cuối cùng áp dụng lệnh motor, ví dụ `robot_car`, để tránh hai module ra lệnh trái ngược.
+PR ghi: thay đổi hành vi, owner file, cách thử, số đo, case lỗi và giới hạn. Người review thử ít nhất một case lỗi mà tác giả chưa dùng. Nhân quản lý main/config/IRQ/CMake; Hưng gửi yêu cầu source/pin/API trong PR, không sửa song song gây xung đột.
 
-| Trạng thái đề xuất | Công việc | Điều kiện thoát |
-| --- | --- | --- |
-| `IDLE` | Motor dừng; chờ START | START và các điều kiện chạy đều đạt |
-| `FORWARD` | Đi theo tốc độ đã thử nghiệm | Vật cản → `STOP`; nút STOP → `IDLE`; lỗi → `FAULT` |
-| `STOP` | Dừng do gặp vật cản; chọn phương án né | Có phương án hợp lệ → trạng thái quay; hết khả năng thử → `FAULT` |
-| `TURN_LEFT/RIGHT` | Quay theo giới hạn đã chốt | Hết thời gian quay → `CHECK`; STOP/lỗi được xử lý ngay theo ưu tiên |
-| `CHECK` | Giữ dừng, đợi phép đo mới | Đường thoáng → `FORWARD`; còn vật cản → thử lại có giới hạn; dữ liệu lỗi/quá hạn → `FAULT` |
-| `FAULT` | Dừng và báo lý do | Lỗi đã hết và tác giả quy định thao tác xác nhận → `IDLE` |
-
-Nút STOP ở đây là dừng theo yêu cầu người dùng, không đồng nghĩa linh kiện bị lỗi. Chỉ có một cảm biến trước thì hướng quay là phương án thử, không phải hướng đã được đo là an toàn. Không suy ra góc quay chính xác từ một khoảng thời gian quay khi chưa có phản hồi phù hợp.
-
-Tự chọn ngưỡng và thời gian bằng thử nghiệm: khoảng cách dừng phải xét tốc độ, thời gian lấy mẫu/xử lý và quãng đường xe còn trôi. Hysteresis là dùng điều kiện vào/ra khác nhau để tránh trạng thái bật tắt liên tục gần một ngưỡng. Giá trị cụ thể sau này đặt trong `app_config.h`, kèm lý do đo được trong tài liệu.
-
-## 8. Kết thúc mỗi mốc
-
-Chạy các ca liên quan trong [TEST_PLAN.md](TEST_PLAN.md), lưu log/ảnh và cập nhật trạng thái thực tế. Sau đó kiểm tra thay đổi trước khi commit:
-
-```sh
-git status
-git diff
-git add Firmware About Images
-git diff --cached
-git commit -m "Bring up GPIO and document hardware checks"
-git push -u origin feature/board-bringup
-```
-
-Lệnh trên áp dụng cho branch ví dụ đã tạo ở bước 2; đổi tên branch và commit theo công việc thực tế. Các file toolchain hoặc cấu hình mới nằm ngoài ba thư mục trên cần được thêm có chủ đích. Không commit file build tạm hoặc thông tin đăng nhập. Có thể tạo Pull Request vào `main` để xem lại từng mốc trước khi hợp nhất.
+Mỗi tuần dành một buổi ghép xe và đo chung. Kết quả chưa đạt vẫn ghi rõ; không sửa test cho khớp số đẹp. Xem [timeline](TEAM_TIMELINE.md) để biết khi nào phải bỏ tính năng mở rộng.
