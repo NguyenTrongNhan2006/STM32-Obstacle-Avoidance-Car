@@ -119,6 +119,23 @@ endif()
 add_executable(${TARGET_ELF}
   ${TP}/CMSIS/Device/ST/STM32F1xx/Source/gcc/startup_stm32f103xb.s
   Core/Src/main.c
+  Core/Src/stm32f1xx_it.c
+  Drivers/MCAL/Src/gpio.c
+  Drivers/MCAL/Src/timebase.c
+  Drivers/MCAL/Src/pwm.c
+  Drivers/MCAL/Src/i2c.c
+  Drivers/MCAL/Src/exti.c
+  Drivers/MCAL/Src/uart_debug.c
+  Drivers/Devices/Src/motor_tb6612.c
+  Drivers/Devices/Src/ultrasonic_hcsr04.c
+  Drivers/Devices/Src/mpu6050.c
+  Drivers/Devices/Src/button.c
+  Drivers/Devices/Src/status_led.c
+  Drivers/Devices/Src/buzzer.c
+  App/Src/safety_monitor.c
+  App/Src/sensor_manager.c
+  App/Src/obstacle_avoidance.c
+  App/Src/robot_car.c
 )
 target_include_directories(${TARGET_ELF} PRIVATE
   Config
