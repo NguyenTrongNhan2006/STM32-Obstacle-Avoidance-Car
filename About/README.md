@@ -9,6 +9,7 @@
 | [Đánh giá ý tưởng](DESIGN_REVIEW.md) | Vì sao áp dụng skeleton có API; các lỗi kỹ thuật đã sửa |
 | [Kế hoạch và phần cứng](PROJECT_PLAN.md) | Phạm vi 3 tháng, BOM, pinout, tính năng mở rộng có điều kiện |
 | [Vai trò từng file](FIRMWARE_GUIDE.md) | Danh sách file, trạng thái thực tế, API và người phụ trách |
+| [Hồ sơ sơ đồ hệ thống](SYSTEM_DIAGRAMS.md) | Mẫu chèn Schematic, FSM từng khối, Flowchart và phần giải thích |
 | [Hướng dẫn triển khai](IMPLEMENTATION_GUIDE.md) | Cài công cụ, build, debug, từng mốc phát triển và cách phối hợp |
 | [Timeline Nhân–Hưng](TEAM_TIMELINE.md) | Công việc mỗi tuần, cân bằng tải, mốc tích hợp và deadline |
 | [Kế hoạch kiểm thử](TEST_PLAN.md) | Điều kiện đạt, tình huống lỗi, cách lưu số liệu |
