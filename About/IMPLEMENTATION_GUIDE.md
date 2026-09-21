@@ -45,16 +45,19 @@ VS Code chỉ là nơi soạn thảo. Repo hiện chưa có startup, linker scri
 
 Sao chép bảng này vào ghi chú thiết kế trong `About/`, rồi tự điền sau khi đối chiếu board và datasheet. “Chưa chốt” không phải giá trị để đưa vào code.
 
+**MCU đã chốt:** STM32F103C8T6, dùng thư viện STM32 HAL. Nhóm hiện có 2 người: **Nhân** phụ trách `motor_driver` (PWM/GPIO động cơ); **Hưng** phụ trách `ultrasonic_hcsr04` và `obstacle_avoidance`. Giá trị dưới đây khớp với `Firmware/Config/board_config.h` — coi file đó là nguồn chốt cuối khi viết code, bảng này chỉ để tra cứu nhanh.
+
 | Tín hiệu | Chân MCU | Ngoại vi/kênh | Mức điện áp/cực tính | Module sở hữu |
 | --- | --- | --- | --- | --- |
-| PWM motor trái/phải | Chưa chốt | Timer/kênh chưa chốt | Chưa chốt | `pwm` |
-| Hướng motor / standby | Chưa chốt | GPIO | Chưa chốt | `motor_tb6612` hoặc driver thay thế |
-| Trigger / Echo | Chưa chốt | GPIO + bộ đo thời gian | Chưa chốt | `ultrasonic_hcsr04` |
+| PWM motor trái/phải | PA0 (trái), PA1 (phải) | TIM2_CH1 / TIM2_CH2, PWM1, 1 kHz (PSC=71, ARR=999) | 3.3V logic; tần số/clock timer giả định 72 MHz, cần đối chiếu `SystemClock_Config()` thực tế | `motor_driver` |
+| Hướng motor (IN1/IN2) | PB0/PB1 (trái), PB10/PB11 (phải) | GPIO output | 3.3V logic; **ánh xạ trái/phải là giả định, chưa đối chiếu sơ đồ đấu dây thật** | `motor_driver` |
+| Trigger / Echo | PB8 (Trig), PA8 (Echo) | GPIO output / TIM1_CH1 input capture | Trig 3.3V logic; mức Echo của module thực tế chưa kiểm tra | `ultrasonic_hcsr04` |
 | SDA / SCL | Chưa chốt | I2C | Pull-up và mức logic chưa chốt | `i2c` |
 | IR trái/phải, nếu có | Chưa chốt | GPIO/EXTI | Chưa chốt | `ir_obstacle` |
 | START/STOP | Chưa chốt | GPIO/EXTI | Chưa chốt | `button` |
-| LED / buzzer | Chưa chốt | GPIO/PWM tùy linh kiện | Chưa chốt | `status_led`, `buzzer` |
-| UART debug | Chưa chốt | USART | Chưa chốt | `uart_debug` |
+| LED debug/trạng thái | PC13 | GPIO output | 3.3V logic | `status_led` |
+| Buzzer | Chưa chốt | GPIO/PWM tùy linh kiện | Chưa chốt | `buzzer` |
+| UART debug | PA9 (TX), PA10 (RX) | USART1, 115200 baud | 3.3V logic (TTL) | `uart_debug` |
 | Nạp/debug | Theo board thực tế | SWD | Theo board thực tế | Công cụ nạp |
 
 Ghi thêm nguồn clock, tần số bộ đếm và đơn vị thời gian cho mỗi timer. Tránh để driver tự cấu hình lại một timer đang phục vụ module khác. Nếu dùng chung, phải thiết kế rõ phần cấu hình chung và quyền thay đổi của từng module.

@@ -2,7 +2,18 @@
 
 [Về mục lục](README.md) · [Các bước tự triển khai](IMPLEMENTATION_GUIDE.md) · [Kế hoạch kiểm thử](TEST_PLAN.md)
 
-Mỗi file `.c/.h` trong `Firmware/` chỉ chứa `// TO DO`. Tên module thể hiện cách chia công việc dự kiến, không có nghĩa đã hỗ trợ phần cứng hoặc có API chạy được. `CMakeLists.txt` chỉ chứa `# TO DO`; chưa thể build/nạp. Mọi hướng dẫn nằm trong `About/` để phần firmware dành hoàn toàn cho tác giả tự triển khai.
+Phần lớn file `.c/.h` trong `Firmware/` vẫn chỉ chứa `// TO DO`. Tên module thể hiện cách chia công việc dự kiến, không có nghĩa đã hỗ trợ phần cứng hoặc có API chạy được, **trừ các file đã liệt kê bên dưới**. `CMakeLists.txt` chỉ chứa `# TO DO`; chưa thể build/nạp (còn thiếu CMSIS/HAL driver pack và `stm32f1xx_hal_conf.h`). Mọi hướng dẫn nằm trong `About/` để phần firmware dành cho nhóm tự triển khai.
+
+**Đã triển khai (2 người: Nhân, Hưng):**
+
+| File | Trạng thái | Người phụ trách |
+| --- | --- | --- |
+| `Config/board_config.h` | Có định nghĩa pin/timer thật (xem bảng pinout ở [IMPLEMENTATION_GUIDE.md §3](IMPLEMENTATION_GUIDE.md#3-lập-bảng-phần-cứng-và-tài-nguyên)) | Chung |
+| `Drivers/Devices/Inc/motor_driver.h` + `Src/motor_driver.c` | Header + implementation thật: cấu hình TIM2 PWM, GPIO hướng, `Motor_Init/SetSpeed/Stop/Brake/StopAll` | Nhân |
+| `Drivers/Devices/Inc/ultrasonic_hcsr04.h` | Chỉ header (interface), `.c` vẫn `// TO DO` | Hưng |
+| `App/Inc/obstacle_avoidance.h` | Chỉ header (interface, theo FSM ở [PROJECT_PLAN.md](PROJECT_PLAN.md#đề-xuất-hành-vi)), `.c` vẫn `// TO DO` | Hưng |
+
+`Drivers/Devices/Inc/motor_tb6612.h` và `Src/motor_tb6612.c` là sườn cũ, cùng vai trò với `motor_driver` nhưng chưa được xoá — hai module này trùng lặp trách nhiệm, cần dọn lại (xoá `motor_tb6612` hoặc gộp) trước khi build thật.
 
 ## Cấu trúc
 

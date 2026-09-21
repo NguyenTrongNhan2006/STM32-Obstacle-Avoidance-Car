@@ -16,7 +16,7 @@ Cách này kết hợp **PWM + MPU6050** của chủ đề xe robot với **đa 
 
 | Thành phần | Phương án ban đầu | Ghi chú khi chốt |
 | --- | --- | --- |
-| MCU | STM32F103C8T6 / Blue Pill | Phù hợp nền STM32F103 đã chọn; kiểm tra board thực tế |
+| MCU | STM32F103C8T6 / Blue Pill — **đã chốt**, dùng thư viện STM32 HAL | Kiểm tra board thực tế; pinout đã chốt trong `Firmware/Config/board_config.h` và [IMPLEMENTATION_GUIDE.md §3](IMPLEMENTATION_GUIDE.md#3-lập-bảng-phần-cứng-và-tài-nguyên) |
 | Motor driver | TB6612FNG + hai động cơ DC giảm tốc | Chọn theo điện áp và dòng kẹt motor, khả năng tản nhiệt của module |
 | Khoảng cách trước | HC-SR04 | Kiểm tra thông số module mua thực tế; xử lý mức điện áp Echo phù hợp GPIO STM32 |
 | Vật cản hai bên | Hai module IR digital | Xác nhận mức điện áp, cực tính output; thử với nhiều bề mặt và ánh sáng |
@@ -60,6 +60,6 @@ Nút STOP được ưu tiên ở mọi trạng thái và đưa xe về `IDLE`; n
 - Encoder/PID: chỉ thêm khi cần kiểm soát tốc độ hoặc góc quay chính xác hơn.
 - Điều khiển bằng nghiêng tay: cần MPU6050 ở bộ điều khiển riêng và đường truyền có timeout mất kết nối; không phải chỉ gắn MPU6050 trên xe.
 
-## Cần tác giả chốt khi bắt đầu viết code
+## Cần chốt khi bắt đầu viết code
 
-Board đang có, motor/driver, cảm biến và nguồn; vai trò MPU6050; HAL/LL hay thanh ghi trực tiếp. Sau đó mới lập pinout, định nghĩa API và hoàn thiện build.
+Board đang có, motor/driver, cảm biến và nguồn; vai trò MPU6050. MCU (STM32F103C8T6) và lựa chọn thư viện (STM32 HAL) đã chốt; pinout động cơ và HC-SR04 đã chốt trong `board_config.h`, các tín hiệu còn lại (I2C, IR, START/STOP, buzzer) vẫn "Chưa chốt". Sau đó mới định nghĩa API còn lại và hoàn thiện build.
