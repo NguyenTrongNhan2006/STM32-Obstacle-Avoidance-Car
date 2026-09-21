@@ -56,8 +56,8 @@ Các hàng driver/App dưới đây tương ứng **cả file .h trong Inc và .
 | `motor_tb6612.h/.c` | Enum MOTOR_*, config callback an toàn; init/apply luôn tắt STBY; NOT_READY | Nhân: truth table, PWM, đổi hướng, fault override và thử trên giá đỡ |
 | `ultrasonic_hcsr04.h/.c` | init/request/read; mẫu mặc định NOT_READY, đơn vị mm | Hưng: trigger/capture, timeout, chống overlap và lọc mẫu |
 | `mpu6050.h/.c` | init/read/calibrate; 3 accel + 3 gyro signed raw, temperature raw, timestamp/status | Hưng: identity, ranges, scale, bias, hướng trục, góc nghiêng |
-| `button.h/.c` | debounce config và đọc pressed stub | Nhân: debounce theo thời gian, phân biệt STOP với rearm |
-| `status_led.h/.c` | IDLE/RUNNING/FAULT pattern stub | Nhân: chỉ thị không block |
+| `button.h/.c` | **Đã có**: debounce theo thời gian bằng polling `gpio_read` + `timebase_now_ms`, wrap-safe; trả mức đã lọc | Nhân: EXTI event capture khi NVIC được bật; đo thời gian dội thật để chốt `BUTTON_DEBOUNCE_MS` |
+| `status_led.h/.c` | **Đã có**: IDLE nháy chậm, RUNNING sáng, FAULT nháy nhanh; tính pha từ `now_ms`, không block, không sở hữu timer | Nhân: xác nhận cực tính active-low trên board thật |
 | `buzzer.h/.c` | loại active-high, pattern, update theo now_ms; stub | Hưng: pattern không block và mạch kích phù hợp |
 
 Driver không đoán sensor đã hợp lệ. Return code nói giao dịch/API có thành công hay không; sample.status nói phép đo có dùng được hay không. Với IMU, raw chưa phải độ/s hay m/s²; chỉ convert sau khi xác nhận range/scale.
@@ -67,11 +67,15 @@ Driver không đoán sensor đã hợp lệ. Return code nói giao dịch/API c�
 | Cặp file | Đã có | Owner và việc tiếp theo |
 | --- | --- | --- |
 | `sensor_manager.h/.c` | Hai mailbox static dài 1, khởi tạo NOT_READY, get_latest dùng peek | Hưng: tSensor là producer duy nhất; overwrite bản copy với timestamp lúc lấy mẫu |
-| `safety_monitor.h/.c` | egSafety static; boot có STOP + SENSOR_FAULT; predicate kiểm tra bit | Nhân: fault latch, freshness, tilt, deliberate rearm; không tự clear khi thiếu mẫu |
-| `obstacle_avoidance.h/.c` | CAR_* enum, context, bảng FSM đề xuất; update trả STOP/NOT_READY | Nhân: FSM dùng deadline; Hưng review các case sensor lỗi |
-| `robot_car.h/.c` | Init nối callback motor với safety; update chỉ yêu cầu STOP | Nhân: duy nhất gọi motor_apply trong App, ghép snapshot/FSM/output |
+| `safety_monitor.h/.c` | **Đã có**: fault latch, freshness theo `SENSOR_STALE_MS`, tilt scale-independent, rearm có chủ đích qua cạnh lên của nút; chỉ clear bit đã chứng minh là hết | Nhân: đo độ trễ STOP; Hưng review ngưỡng tilt và hướng trục |
+| `obstacle_avoidance.h/.c` | **Đã có**: FSM 7 trạng thái, hysteresis `D_STOP_MM`/`D_CLEAR_MM`, deadline `T_TURN_MS`, retry budget, CHECK chỉ nhận mẫu lấy sau khi vào trạng thái; FAULT là terminal | Nhân: chốt ngưỡng bằng số đo; Hưng review các case sensor lỗi |
+| `robot_car.h/.c` | **Đã có**: rearm theo cạnh, snapshot → FSM → đúng **một** lần `motor_apply` trên mọi nhánh, cập nhật LED | Nhân: nối vào tDecision và chứng minh thời gian shutdown trước khi có motor thật |
 
 Handles mailbox/event group công khai để học và debug, nhưng ownership vẫn bắt buộc: ngoài sensor_manager chỉ đọc mailbox; ngoài safety_monitor không clear/set bit trực tiếp. ISR nên notify Task an toàn để Task cập nhật state; không nhầm event-group FromISR được xử lý ngay như một GPIO kill.
+
+Năm module ghi **Đã có** ở trên biên dịch sạch với `-Wall -Wextra -Wpedantic -Wshadow -Wdouble-promotion` nhưng **chưa được Task nào gọi**: `task_safety` và `task_decision` trong `main.c` vẫn là vòng chờ placeholder, nên `--gc-sections` loại `safety_update`, `robot_car_update`, `obstacle_avoidance_update`, `button_read` và `status_led_set` khỏi ELF. Build sạch ở đây chứng minh mã hợp lệ, **không** chứng minh mã đã chạy. Việc nối vào Task là bước tích hợp riêng, làm cùng lúc với đo độ trễ STOP.
+
+`safety_update` trả `STATUS_OK` nghĩa là chính sách đã chạy, không phải xe an toàn; điều kiện chạy chỉ đọc qua `safety_is_clear_to_run()`.
 
 `sensor_manager_get_latest` trả OK khi **copy được** hai mailbox. Người dùng phải kiểm tra status và tuổi của từng mẫu; hai mẫu không được coi là lấy cùng thời điểm. Consumer dùng peek để tSafety và tDecision đều đọc được; receive sẽ làm mất mẫu cho consumer còn lại.
 
