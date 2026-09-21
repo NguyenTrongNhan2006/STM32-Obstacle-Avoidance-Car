@@ -1,21 +1,70 @@
 #include "robot_car.h"
+#include "app_config.h"
 #include "motor_tb6612.h"
 #include "obstacle_avoidance.h"
 #include "safety_monitor.h"
 #include "sensor_manager.h"
+#include "status_led.h"
+
 static avoidance_context_t avoidance;
+static bool safety_was_clear;
+
+static uint8_t speed_for(motor_cmd_t command)
+{
+    switch (command) {
+    case MOTOR_FORWARD:
+    case MOTOR_BACKWARD:
+        return DRIVE_SPEED_PERCENT;
+    case MOTOR_TURN_LEFT:
+    case MOTOR_TURN_RIGHT:
+        return TURN_SPEED_PERCENT;
+    default:
+        return 0U;
+    }
+}
+
+static led_pattern_t pattern_for(car_state_t state)
+{
+    if (state == CAR_FAULT) { return LED_FAULT; }
+    return (state == CAR_IDLE) ? LED_IDLE : LED_RUNNING;
+}
+
 status_t robot_car_init(void)
 {
     const motor_config_t config = { .is_safe = safety_is_clear_to_run };
     if (safety_init() != STATUS_OK || sensor_manager_init() != STATUS_OK ||
         obstacle_avoidance_init(&avoidance) != STATUS_OK) { return STATUS_ERROR; }
+    safety_was_clear = false;
+    (void)status_led_init();
     return motor_init(&config);
 }
+
 status_t robot_car_update(uint32_t now_ms)
 {
-    (void)now_ms;
-    /* IMPLEMENT: peek snapshots, request FSM command, then call motor_apply once.
-     * Before real motion: prove STOP/fault latency including blocked/stalled decision.
+    sample_t range;
+    imu_sample_t imu;
+    motor_cmd_t request = MOTOR_STOP;
+    const bool safe_now = safety_is_clear_to_run();
+
+    /* The only path out of a latched FSM fault: the safety owner cleared the
+     * inhibit after a deliberate rearm. Edge-triggered, so a persistently clear
+     * safety state cannot keep resetting the FSM.
      */
-    return motor_apply(MOTOR_STOP, 0U);
+    if (safe_now && !safety_was_clear && avoidance.state == CAR_FAULT) {
+        (void)obstacle_avoidance_init(&avoidance);
+    }
+    safety_was_clear = safe_now;
+
+    /* A failed snapshot leaves the request at MOTOR_STOP rather than reusing a
+     * previous command.
+     */
+    if (sensor_manager_get_latest(&range, &imu) == STATUS_OK) {
+        (void)obstacle_avoidance_update(&avoidance, &range, &imu, now_ms, &request);
+    }
+    (void)status_led_set(pattern_for(avoidance.state));
+
+    /* Sole motor command boundary in the App: exactly one call per update, on
+     * every path. motor_apply still re-checks the safety predicate itself.
+     */
+    return motor_apply(request, speed_for(request));
 }

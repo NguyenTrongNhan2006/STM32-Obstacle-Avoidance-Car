@@ -33,6 +33,16 @@
 #define T_TURN_MS 400U
 #define MAX_AVOIDANCE_ATTEMPTS 3U
 #define TILT_LIMIT_DEG 30U
+#define BUTTON_DEBOUNCE_MS 25U
+#define DRIVE_SPEED_PERCENT 35U
+#define TURN_SPEED_PERCENT 30U
+/* [DO] cos^2(TILT_LIMIT_DEG) as an exact integer ratio: cos^2(30 deg) = 3/4.
+ * The ratio is NOT derived from TILT_LIMIT_DEG at compile time; change both
+ * together. It lets the tilt test compare squared accelerometer components
+ * without knowing the configured full-scale range.
+ */
+#define TILT_COS2_NUM 3U
+#define TILT_COS2_DEN 4U
 /* [DO] d_stop >= v_max*(t_sample+t_scheduling+t_actuation)
  *                 + measured braking/coasting distance + margin.
  * Use consistent units; all constants above are unmeasured proposals.
