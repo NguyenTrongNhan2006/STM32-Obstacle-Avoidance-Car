@@ -2,6 +2,8 @@
 
 [Về mục lục](README.md) · [Vai trò firmware](FIRMWARE_GUIDE.md) · [Phần cứng](PROJECT_PLAN.md) · [Timeline Nhân–Hưng](TEAM_TIMELINE.md)
 
+> **Sơ đồ Mermaid dựng từ mã nguồn** nằm ở [`docs/diagrams/`](../docs/diagrams/): [phần cứng](../docs/diagrams/hardware_block_diagram.md) · [kiến trúc phần mềm](../docs/diagrams/software_architecture.md) · [FSM điều khiển](../docs/diagrams/fsm_control_flow.md) · [FreeRTOS concurrency](../docs/diagrams/freertos_concurrency.md). Chúng mô tả **thiết kế đang có trong repo** và cần cập nhật khi code đổi. File này giữ vai trò khác: hồ sơ sơ đồ vẽ tay, ảnh lắp ráp và **bằng chứng đo kiểm trên phần cứng thật** — thứ mà sơ đồ sinh từ mã nguồn không thay thế được.
+
 **Trạng thái: mẫu tài liệu — chưa có sơ đồ được chèn hoặc xác nhận.** Nhân và Hưng điền dần khi tự thiết kế, triển khai và đo kiểm. Các nội dung cần có bên dưới là hướng dẫn vẽ/giải thích, không khẳng định chức năng đã hoạt động.
 
 ## 1. Cách chèn hình và quản lý phiên bản
