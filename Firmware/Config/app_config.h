@@ -44,6 +44,12 @@
  * a stress on the driver and gearbox, too large is a slow avoidance manoeuvre.
  */
 #define MOTOR_DIRECTION_BRAKE_MS 60U
+/* [CO DINH] Nominal IWDG timeout. The LSI that clocks it is only specified as
+ * 30..60 kHz, so the real window is 333..667 ms. Any refresh cadence must be
+ * derived from the 333 ms lower bound, never from this nominal value.
+ * safety_monitor refreshes every ALIVE_WINDOW_MS = 100 ms.
+ */
+#define WATCHDOG_TIMEOUT_MS 500U
 /* [DO] cos^2(TILT_LIMIT_DEG) as an exact integer ratio: cos^2(30 deg) = 3/4.
  * The ratio is NOT derived from TILT_LIMIT_DEG at compile time; change both
  * together. It lets the tilt test compare squared accelerometer components

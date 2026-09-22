@@ -64,6 +64,7 @@ add_library(stm32_hal STATIC
   ${TP}/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_gpio.c
   ${TP}/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_gpio_ex.c
   ${TP}/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_i2c.c
+  ${TP}/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_iwdg.c
   ${TP}/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_pwr.c
   ${TP}/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_rcc.c
   ${TP}/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_rcc_ex.c
@@ -132,6 +133,7 @@ add_executable(${TARGET_ELF}
   Drivers/MCAL/Src/i2c.c
   Drivers/MCAL/Src/exti.c
   Drivers/MCAL/Src/uart_debug.c
+  Drivers/MCAL/Src/watchdog.c
   Drivers/Devices/Src/motor_tb6612.c
   Drivers/Devices/Src/ultrasonic_hcsr04.c
   Drivers/Devices/Src/mpu6050.c

@@ -404,12 +404,7 @@ task_decision 16 + robot_car_update 72 + motor_apply 32 + drive 88
 
 `check_constraints.sh` → **Tất cả đạt**. Không warning từ mã dự án.
 
-#### ⚠️ Lỗ hổng còn lại: chưa có watchdog
-
-Nếu MCU treo **trong lúc** STBY đang cao và một chiều đang được dẫn động, motor sẽ chạy
-mãi. Không có lựa chọn nào trong `motor_apply()` bịt được lỗ này — nó cần **IWDG**
-(`HAL_IWDG_MODULE_ENABLED` hiện **chưa bật**). Đây là việc phải làm **trước khi cấp nguồn
-động lực lần đầu**, không phải sau.
+#### Lỗ hổng "MCU treo khi đang dẫn động" → đã đóng ở bước 4b
 
 #### Kiểm chứng trên board — CHƯA CHẠY
 
@@ -433,6 +428,119 @@ mãi. Không có lựa chọn nào trong `motor_apply()` bịt được lỗ nà
    có đúng `MOTOR_DIRECTION_BRAKE_MS = 60 ms` ở trạng thái IN1=IN2=H trước khi bánh trái
    đảo chiều không.
 9. **Đo `d_coast` và `v` thật** rồi tính lại `D_STOP_MM` — hiện vẫn là `[DO]`.
+
+### Bước 4b — Watchdog (IWDG) ✅ CODE XONG, CHƯA THỬ TRÊN BOARD
+
+Chèn **trước** bước 5 vì nó đóng lỗ hổng duy nhất mà `motor_apply()` không bịt được:
+MCU treo trong lúc STBY đang cao và một chiều đang dẫn động thì motor chạy mãi.
+
+- [x] `HAL_IWDG_MODULE_ENABLED` + `stm32f1xx_hal_iwdg.c` vào `CMakeLists.txt`
+- [x] **Module MCAL mới** `Drivers/MCAL/{Inc,Src}/watchdog.{h,c}`
+- [x] Timeout 500 ms danh nghĩa — prescaler/reload **tính ra lúc chạy**, không hard-code
+- [x] `egAlive` + `safety_check_in()` trong `safety_monitor`
+- [x] **Chỉ `tSafety` được refresh**, và chỉ sau khi chứng minh task khác còn sống
+- [x] `reset_by_wdg=` trong log để biết lần khởi động này đến từ đâu
+- [ ] **Thử trên board** — CHƯA LÀM
+
+#### Cấu hình — tính ra chứ không hard-code
+
+`watchdog_init()` quét bộ prescaler 4…256 và chọn **cái nhỏ nhất** mà Reload vẫn vừa
+12 bit, vì prescaler nhỏ thì bước đếm mịn hơn. Với `LSI_VALUE = 40000` và 500 ms:
+
+```text
+div 4  -> reload 5000  > 4095   loại
+div 8  -> reload 2500  ≤ 4095   chọn  ->  IWDG_PRESCALER_8, Reload = 2500
+timeout = 2500 × 8 / 40000 = 500,0 ms  (đúng chính xác)
+```
+
+Đã kiểm lại phép toán này bằng chương trình host riêng, không chỉ đọc code.
+
+#### ⚠️ LSI không chính xác — điều quan trọng nhất về khối này
+
+`LSI_VALUE = 40 kHz` chỉ là giá trị **điển hình**. Datasheet STM32F103 cho dải
+**30…60 kHz** theo linh kiện và nhiệt độ. Nên timeout thật là:
+
+| LSI | Timeout thật |
+| --- | --- |
+| 60 kHz | **333 ms** ← cận dưới, phải thiết kế theo số này |
+| 40 kHz | 500 ms (danh nghĩa) |
+| 30 kHz | 667 ms |
+
+**Nhịp refresh phải suy ra từ 333 ms, không phải từ 500 ms.** `ALIVE_WINDOW_MS = 100 ms`
+cho biên **3,3 lần** ở trường hợp xấu nhất.
+
+#### Logic kick-dog
+
+```mermaid
+flowchart LR
+    S["tSensor mỗi 10 ms<br/>sau khi xong một vòng"] -->|"ALIVE_BIT_SENSOR"| EG["egAlive"]
+    D["tDecision mỗi 20 ms<br/>sau khi xong một vòng"] -->|"ALIVE_BIT_DECISION"| EG
+    EG --> C{"tSafety, mỗi 100 ms:<br/>xEventGroupClearBits trả về<br/>giá trị TRƯỚC khi xoá<br/>== ALIVE_ALL_MASK ?"}
+    C -->|"đủ cả hai"| K["watchdog_refresh()"]
+    C -->|"thiếu bit"| N["KHÔNG làm gì<br/>— chính việc không refresh là hành động"]
+    N --> R["IWDG hết giờ → reset MCU"]
+```
+
+| Quyết định | Lý do |
+| --- | --- |
+| Chỉ giám sát `tSensor` + `tDecision` | Đây là hai task trên đường an toàn. `tLog`/`tBuzzer` treo thì xe vẫn an toàn; đưa vào chỉ làm tăng rủi ro **reset oan**. |
+| `tSafety` **không** tự check-in | Chính nó chạy mới refresh được. Nó treo ⇒ watchdog tự hết giờ. Cho nó tự báo khoẻ là vô nghĩa. |
+| Check-in đặt **sau** phần việc | Báo "đã chạy xong một vòng", không phải "đã vào hàm". Đặt trước sẽ báo khoẻ ngay cả khi thân vòng lặp treo. |
+| `xEventGroupClearBits` để đọc | Nó trả về giá trị **trước khi xoá**, nên đọc và đặt lại cửa sổ là một thao tác nguyên tử — không có khe để mất một lần check-in. |
+| Cửa sổ 100 ms | Lớn hơn chu kỳ task chậm nhất được giám sát (20 ms) **5 lần** ⇒ không reset oan; nhỏ hơn cận dưới IWDG (333 ms) **3,3 lần** ⇒ kịp refresh. |
+| `watchdog_init()` gọi **sau cùng** | Một khi chạy thì không tắt được. Càng ít code chạy trước nó càng ít nguy cơ boot loop. Bỏ qua giai đoạn init **không** mất an toàn: `gpio_init()` đã hạ STBY từ dòng đầu tiên nên treo trong init vẫn để motor ở standby. |
+
+**Độ trễ phát hiện:** task treo → cửa sổ kế tiếp không đủ bit → IWDG hết giờ.
+Tổng từ lúc treo đến lúc reset: **~333…767 ms**. Đây là lưới cuối cùng, không phải
+đường phản ứng chính — đường chính vẫn là `safety_monitor` + `motor_apply()`.
+
+#### Trạng thái motor sau khi IWDG reset
+
+Đây là **điều kiện phần cứng, firmware không thay thế được**:
+
+1. Reset STM32 đưa **toàn bộ GPIO về floating input (high-Z)** — kể cả PB5 (STBY),
+   PB0/PB1/PB10/PB11 (hướng) và PA6/PA7 (PWM).
+2. STBY thả nổi ⇒ **điện trở kéo xuống 10k ngoài** giữ nó ở mức thấp ⇒ TB6612 vào
+   standby ⇒ **cả hai đầu ra HIGH-Z**, motor quay tự do rồi dừng.
+3. Khi firmware chạy lại, `gpio_init()` gọi `gpio_emergency_stop()` ở **dòng đầu tiên**,
+   trước khi cấu hình bất cứ chân nào khác.
+
+> 🔴 **Không có điện trở kéo xuống 10k thì bước 2 không xảy ra.** Trong cửa sổ reset,
+> STBY thả nổi và các chân hướng cũng thả nổi — hành vi của TB6612 khi đó là **không
+> xác định**. Watchdog chỉ hữu ích khi có con trở này. Đây là lý do nó được liệt là
+> điều kiện an toàn bắt buộc chứ không phải tuỳ chọn.
+
+#### Kiểm chứng tĩnh
+
+```text
+watchdog_refresh()  được gọi từ ĐÚNG MỘT chỗ:  safety_monitor.c:98
+safety_check_in()   được gọi từ ĐÚNG HAI chỗ:  main.c:124 (tSensor), main.c:138 (tDecision)
+```
+
+Stack đường watchdog: `task_safety 16 + safety_update 72 + supervise_tasks 8 +
+watchdog_refresh 8 = 104 B / 1024 B`.
+
+#### Kết quả build sau bước 4b
+
+| Bản | Flash | RAM | So với bước 4 |
+| --- | --- | --- | --- |
+| Debug | 26 600 B (**40,59 %**) | 8 928 B (**43,59 %**) | Flash +508 B, RAM +48 B |
+| Release | 22 592 B (**34,47 %**) | 8 928 B (**43,59 %**) | Flash +440 B |
+
+`check_constraints.sh` → **Tất cả đạt**. Không warning từ mã dự án.
+
+#### Thử trên board — CHƯA LÀM
+
+1. Khởi động bình thường → `reset_by_wdg=0`, xe chạy được, **không** reset lặp.
+2. **Thử treo có chủ đích:** tạm thêm `for(;;){}` vào cuối `task_decision`, nạp, xem MCU
+   có reset trong ~333…767 ms và lần khởi động sau in `reset_by_wdg=1` không. **Gỡ bỏ
+   ngay sau khi thử.**
+3. Lặp lại với `task_sensor`.
+4. **Thử với `tLog`** — phải **KHÔNG** reset, vì nó không nằm trong `ALIVE_ALL_MASK`.
+5. Đo bằng oscilloscope: sau khi watchdog reset, **STBY phải xuống thấp trong vòng
+   vài µs** và ở đó suốt cửa sổ reset. Nếu nó trôi lên, con trở 10k thiếu hoặc sai giá trị.
+6. Chạy liên tục ≥ 30 phút không có reset nào — chứng minh cửa sổ 100 ms đủ biên với
+   LSI thật của con chip này.
 
 ### Bước 5 — Phụ trợ, không chặn luồng chính ⬜
 

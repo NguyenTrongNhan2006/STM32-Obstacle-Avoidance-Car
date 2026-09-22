@@ -9,6 +9,7 @@
 #include "i2c.h"
 #include "timebase.h"
 #include "uart_debug.h"
+#include "watchdog.h"
 #include "buzzer.h"
 #include "robot_car.h"
 #include "safety_monitor.h"
@@ -118,6 +119,9 @@ static void task_sensor(void *argument)
      */
     for (;;) {
         (void)sensor_manager_update(timebase_now_ms());
+        /* Check-in SAU khi da lam viec: bao "da chay xong mot vong", khong phai
+         * "da vao ham". Dat truoc se bao khoe ngay ca khi than vong lap treo. */
+        safety_check_in(ALIVE_BIT_SENSOR);
         (void)xTaskDelayUntil(&last_wake, pdMS_TO_TICKS(SENSOR_IMU_PERIOD_MS));
     }
 }
@@ -131,6 +135,7 @@ static void task_decision(void *argument)
      */
     for (;;) {
         last_motor_status = (uint32_t)robot_car_update(timebase_now_ms());
+        safety_check_in(ALIVE_BIT_DECISION);
         (void)xTaskDelayUntil(&last_wake, pdMS_TO_TICKS(DECISION_TARGET_PERIOD_MS));
     }
 }
@@ -192,6 +197,7 @@ int main(void)
     const timebase_config_t time_config = { .capture_tick_hz = 1000000UL };
     const uart_debug_config_t uart_config = { .baud = DEBUG_BAUD, .timeout_ms = UART_TIMEOUT_MS };
     const i2c_config_t bus_config = { .bus_hz = IMU_I2C_SPEED_HZ };
+    const watchdog_config_t dog_config = { .timeout_ms = WATCHDOG_TIMEOUT_MS };
     static const TaskFunction_t functions[APP_TASK_COUNT] = {
         task_safety, task_sensor, task_decision, task_log, task_buzzer
     };
@@ -216,7 +222,17 @@ int main(void)
     /* Current device stub intentionally reports NOT_READY, but static App objects exist. */
     app_status = robot_car_init();
     configASSERT(app_status == STATUS_OK || app_status == STATUS_NOT_READY);
-    (void)uart_log("Skeleton: motor disabled, algorithms TODO\r\n");
+
+    /* Watchdog khoi tao SAU CUNG trong day init va NGAY TRUOC khi tao task.
+     * Ly do: mot khi chay thi khong tat duoc nua, nen cang it code chay truoc no
+     * cang it nguy co boot loop. Bo qua giai doan init KHONG lam mat an toan —
+     * gpio_init() da ha STBY tu dong dau tien, nen treo trong init van de motor
+     * o standby. */
+    configASSERT(watchdog_init(&dog_config) == STATUS_OK);
+
+    (void)uart_log("boot: sensing+actuation live, watchdog armed\r\n");
+    /* 1 = lan reset vua roi la do watchdog, tuc mot task giam sat da treo. */
+    (void)uart_log_u32("reset_by_wdg=", watchdog_caused_last_reset() ? 1U : 0U);
     for (uint32_t index = 0U; index < APP_TASK_COUNT; ++index) {
         configASSERT(xTaskCreateStatic(functions[index], names[index], APP_TASK_STACK_WORDS,
                      NULL, priorities[index], task_stacks[index], &task_controls[index]) != NULL);
