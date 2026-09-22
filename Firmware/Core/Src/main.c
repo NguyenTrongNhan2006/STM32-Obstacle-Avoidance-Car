@@ -149,6 +149,13 @@ static void task_log(void *argument)
             (void)uart_log_u32("safety=", bits);
             if (sensor_manager_get_latest(&range, &imu) == STATUS_OK) {
                 (void)uart_log_u32("range_st=", (uint32_t)range.status);
+                /* Chi in gia tri khi mau hop le. In ca khi TIMEOUT/ERROR se tao
+                 * ra mot con so trong duong nhu do duoc — dung thu can tranh. */
+                if (range.status == SAMPLE_OK) {
+                    (void)uart_log_u32("range_mm=", range.value);
+                    (void)uart_log_u32("range_age_ms=",
+                                       (uint32_t)(timebase_now_ms() - range.timestamp_ms));
+                }
                 (void)uart_log_u32("imu_st=", (uint32_t)imu.status);
             }
             previous_bits = bits;

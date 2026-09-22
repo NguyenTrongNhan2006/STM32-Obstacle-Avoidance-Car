@@ -132,18 +132,83 @@ Chưa nạp lên phần cứng. Kỳ vọng khi nạp:
 - **Xe đứng yên. Đây là kết quả đúng, không phải lỗi** — `motor_apply()` vẫn luôn
   trả `NOT_READY` và `gpio_emergency_stop()` chạy vô điều kiện mỗi 20 ms.
 
-### Bước 2 — Chuỗi đo khoảng cách ⬜
+### Bước 2 — Chuỗi đo khoảng cách ✅ CODE XONG, CHƯA ĐO TRÊN BOARD
 
-- [ ] `timebase.c :: timebase_capture_us()` — TIM2_CH1 input capture PA0, xử lý overflow,
-      deadline có giới hạn, **không busy-wait**
-- [ ] `ultrasonic_hcsr04.c` — trigger PA1, một phép đo có biên, tôn trọng
-      `SENSOR_RANGE_PERIOD_MS = 60`, timeout `ECHO_TIMEOUT_US = 30000` → `SAMPLE_TIMEOUT`
-- [ ] `sensor_manager.c :: sensor_manager_update()` — nhánh range, `xQueueOverwrite`
-- [ ] **Kiểm chứng:** `uart_log_u32("mm=", ...)` so với thước; che cảm biến →
-      `SAMPLE_TIMEOUT` hữu hạn, không treo
+- [x] `timebase.c` — TIM2 **PWM Input Mode**: TI1 (PA0) nối nội bộ tới cả IC1 (cạnh lên,
+      reset bộ đếm qua slave mode) và IC2 (cạnh xuống → `CCR2` = độ rộng xung)
+- [x] Xử lý tràn bộ đếm: **`URS = 1`** để chỉ tràn thật mới sinh ngắt update
+- [x] `timebase_capture_us()` **non-blocking** — trả `NOT_READY` khi đang đo
+- [x] `ultrasonic_hcsr04.c` — xung Trig 10 µs trên PA1, chống chồng lấn, tôn trọng
+      `SENSOR_RANGE_PERIOD_MS = 60`, `ECHO_TIMEOUT_US = 30000` → `SAMPLE_TIMEOUT`
+- [x] `sensor_manager.c :: sensor_manager_update()` — publish vào `qRangeMailbox`,
+      timestamp là **thời điểm phát Trig**
+- [x] `main.c :: task_log` — in `range_mm=` và `range_age_ms=` khi mẫu hợp lệ
+- [ ] **Kiểm chứng trên board** — CHƯA CHẠY
+
+#### Quyết định thiết kế
+
+**PWM Input Mode thay vì EXTI hai cạnh.** Phần cứng đo và chốt độ rộng xung, nên độ trễ
+ISR và jitter của scheduler **không thể** làm sai phép đo. EXTI chỉ báo có cạnh; thời
+điểm đọc bộ đếm lại phụ thuộc lúc ISR chạy.
+
+**`URS = 1` là bắt buộc.** Slave mode Reset cũng sinh update event mỗi lần nó reset bộ
+đếm — tức mỗi cạnh lên của Echo. Không đặt `URS` thì ISR hiểu nhầm mọi cạnh lên thành
+tràn bộ đếm và **mọi phép đo đều thất bại**. Lỗi này không treo máy nên rất khó thấy.
+
+**Hai lớp deadline độc lập:** phần cứng tràn bộ đếm ở 65 536 µs; phần mềm so `HAL_GetTick`
+với 30 ms. Mất cạnh xuống thì lớp cứng bắt; treo cả ISR thì lớp mềm vẫn bắt.
+
+#### Thay đổi API — cần review chung
+
+Thêm **`timebase_capture_arm()`** vào `timebase.h`. Không có nó,
+`timebase_capture_us()` không phân biệt được kết quả mới với kết quả còn sót của lần đo
+trước. Đây là API dùng chung giữa MCAL và Devices, `CLAUDE.md` yêu cầu review chung.
+
+#### Busy-wait 10 µs — có chủ đích
+
+Xung Trig 10 µs là **yêu cầu của datasheet**, không phải chờ sự kiện. Đo bằng chính bộ
+đếm 1 µs/tick của TIM2 nên không đổi theo mức tối ưu của trình biên dịch. Gọi mỗi 60 ms
+trong `tSensor` (priority 2) ⇒ **0,017 % CPU**, trễ tối đa gây cho `tSafety` là 10 µs
+trên chu kỳ 10 ms. Muốn bỏ hẳn: dùng **TIM4 (đang trống)** ở One-Pulse Mode — nhưng đó
+là quyết định về quyền sở hữu timer, phải chốt trong `board_config.h` trước.
+
+#### Kết quả build sau bước 2
+
+| Bản | Flash | RAM | So với bước 0+1 |
+| --- | --- | --- | --- |
+| Debug | 19 260 B (**29,39 %**) | 8 680 B (**42,38 %**) | Flash +3 020 B, RAM +104 B |
+| Release | 16 416 B (**25,05 %**) | 8 672 B (**42,34 %**) | Flash +2 400 B |
+
+`check_constraints.sh` → **Tất cả đạt**. Không warning từ mã dự án.
+
+Stack usage đo bằng `-fstack-usage` (file `.su`) — chuỗi sâu nhất của `tSensor`:
+
+```text
+task_sensor 16 + sensor_manager_update 24 + ultrasonic_read 16 + timebase_capture_us 16 = 72 B
+timebase_irq_capture = 0 B   (ISR lá, không có khung stack riêng)
+timebase_init        = 80 B  (chạy trước scheduler, trên MSP)
+```
+
+Stack mỗi task là 1 024 B ⇒ biên rất rộng. Vẫn phải đo
+`uxTaskGetStackHighWaterMark()` trên board, con số tĩnh không thay thế được.
+
+#### Kiểm chứng trên board — CHƯA CHẠY
+
+1. **Trước khi cắm Echo:** đo bằng đồng hồ rằng điện áp vào PA0 ≤ 3,3 V.
+   **PA0 không phải chân 5V-tolerant.**
+2. Đặt vật cản ở 100 / 300 / 1000 mm, so `range_mm=` với thước — sai số kỳ vọng ±10 mm.
+3. Che kín cảm biến hoặc rút dây Echo → `range_st=2` (`SAMPLE_TIMEOUT`) trong vòng
+   ~31 ms, **không treo**, `range_mm=` không được in.
+4. Đưa vật cản sát < 20 mm → `range_st=3` (`SAMPLE_ERROR`), không phải `SAMPLE_OK`.
+5. `range_age_ms=` phải dao động trong khoảng 0–70 ms; vượt `SENSOR_STALE_MS = 200`
+   nghĩa là chuỗi đo đang kẹt.
 
 > ⚠️ `SAMPLE_TIMEOUT` **tuyệt đối không** được quy về `0 mm` hay một khoảng cách rất xa.
-> ⚠️ **PA0 không phải chân 5V-tolerant** — phải có mạch hạ áp trước khi cắm Echo.
+> Hiện tại `value = 0` đi kèm `status = SAMPLE_TIMEOUT`; consumer bắt buộc đọc `status`
+> trước, và `safety_monitor` coi mọi status khác `SAMPLE_OK` là fault.
+>
+> ⚠️ Xe vẫn **không chạy** sau bước này: thiếu IMU nên `SAFETY_BIT_SENSOR_FAULT` chưa
+> xoá được. Đúng thiết kế — xem §1.
 
 ### Bước 3 — IMU ⬜ *(bắt buộc, trên đường găng — xem §1)*
 
