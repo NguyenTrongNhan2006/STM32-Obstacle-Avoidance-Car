@@ -324,15 +324,115 @@ task_sensor 16 + sensor_manager_update 24 + update_imu 40 + mpu6050_read 40
 > ⚠️ `mpu6050_calibrate()` **chưa được gọi ở đâu**. Nó phải được gọi có chủ đích khi đã
 > biết chắc xe đứng yên, không phải tự động lúc khởi động.
 
-### Bước 4 — Actuation ⬜ *(sau cùng)*
+### Bước 4 — Actuation ✅ CODE XONG, CHƯA CHẠY MOTOR THẬT
 
-- [ ] `pwm.c` — sở hữu TIM3, hai kênh khởi tạo duty 0, `pwm_write(channel, duty_per_mille)`
-- [ ] `motor_tb6612.c` — chốt **bảng chân lý brake/coast** trước, rồi arbitration
-      fault-dominant và đổi chiều an toàn (qua brake, không đảo trực tiếp)
-- [ ] **Kiểm chứng:** kê bánh khỏi mặt đất, thử từng bánh; **đo thời gian từ lúc nhấn
-      STOP đến khi PWM về 0** — `CLAUDE.md` yêu cầu chứng minh con số này trước khi có
-      motor thật
-- [ ] **Điều kiện phần cứng:** pull-down 10k trên STBY (PB5) phải có trước khi cấp nguồn động lực
+- [x] `pwm.c` — sở hữu TIM3, PSC 0 / ARR 3599 → **20 kHz**, hai kênh khởi tạo duty 0
+- [x] `pwm_write(channel, duty_per_mille)` 0..1000, `pwm_stop()`
+- [x] `motor_tb6612.c` — **bảng chân lý TB6612 đã chốt** (xem dưới)
+- [x] `motor_init()` khởi động ở trạng thái an toàn: STBY LOW, duty 0
+- [x] `motor_apply()` fault-dominant, kiểm tra lại safety predicate trong driver
+- [x] **Cấm đảo chiều trực tiếp** — chèn cửa sổ short brake `MOTOR_DIRECTION_BRAKE_MS`
+- [x] `main.c` — `motor_st=` trong log để quan sát đường an toàn có cắt lệnh hay không
+- [ ] **Chạy motor thật** — CHƯA LÀM
+
+#### Bảng chân lý TB6612FNG — một kênh
+
+| STBY | IN1 | IN2 | PWM | Chế độ |
+| --- | --- | --- | --- | --- |
+| **L** | x | x | x | **Standby** — cả hai đầu ra HIGH-Z, motor quay theo quán tính. Trạng thái sau reset và là đường cắt khẩn cấp. |
+| H | H | H | x | Short brake — nối tắt hai đầu motor |
+| H | H | L | H | Quay chiều thuận, tốc độ theo duty |
+| H | H | L | L | Short brake |
+| H | L | H | H | Quay chiều nghịch |
+| H | L | H | L | Short brake |
+| H | L | L | x | Stop — HIGH-Z, quay theo quán tính |
+
+> **Điều dễ bỏ sót:** ở chế độ quay, **nửa chu kỳ PWM thấp là SHORT BRAKE chứ không
+> phải coast**. Đó là lý do chọn 20 kHz — ngoài ngưỡng nghe và đủ nhanh để động cơ
+> không giật theo từng chu kỳ hãm.
+
+Chiều "thuận" phụ thuộc cách nối dây. **Một bánh quay ngược thì đảo hai dây của bánh
+đó** — không sửa thuật toán né và không thêm cờ đảo chiều trong firmware.
+
+#### ⚠️ Sai lệch pinout đã phát hiện
+
+Yêu cầu ghi STBY ở **PA5**, nhưng `board_config.h` định nghĩa `MOTOR_STBY_PORT GPIOB` /
+`GPIO_PIN_5` → **PB5**. Theo `CLAUDE.md` thì `board_config.h` thắng nên driver dùng PB5.
+**Nếu dây thật đi vào PA5 thì phải sửa `board_config.h`, không sửa driver.**
+AIN1/AIN2 = PB0/PB1 và BIN1/BIN2 = PB10/PB11 thì khớp.
+
+#### `MOTOR_STOP` là short brake, không phải coast — có chủ đích
+
+`d_stop` trong `app_config.h` được dẫn xuất kèm *"measured braking/coasting distance"*,
+tức thiết kế **giả định có phanh**. Coast khi FSM đã quyết định dừng sẽ làm xe trôi tiếp
+và phá vỡ ngân sách quãng đường đó.
+
+Hệ quả: khi safety clear và FSM ở `CAR_IDLE`, bridge **đang bật** với IN1=IN2=H. Đây là
+trạng thái xác định, không dẫn động. Đường cắt cứng (STBY LOW) dành riêng cho đường
+fault. `MOTOR_COAST` vẫn giữ nghĩa thả trôi thật.
+
+#### Kiểm chứng tĩnh đường cắt an toàn
+
+`enter_safe_state()` hạ STBY **trước**, rồi mới dọn duty và các chân hướng — làm ngược
+lại sẽ có một khoảng ngắn bridge vẫn bật trong lúc chân hướng đang đổi.
+`drive()` đặt chiều và duty **trước**, rồi mới bật STBY.
+
+`objdump` trên vùng 244 byte của `motor_apply` đếm được:
+
+```text
+enter_safe_state  x3      3 đường thoát sớm: tham số sai, chưa init, safety không clear
+drive             x3      3 đường ra phần cứng: giữ brake, brake đảo chiều, chạy bình thường
+```
+
+Chân STBY chỉ được kéo lên `true` ở **đúng một chỗ** trong toàn bộ file — dòng cuối của
+`drive()`. Mà cả ba lời gọi `drive()` đều nằm **sau** `safety_check()`. Nên không tồn tại
+đường nào rời `motor_apply()` với bridge bật khi điều kiện chưa đủ.
+
+Stack chain sâu nhất của `tDecision` (từ `.su`):
+
+```text
+task_decision 16 + robot_car_update 72 + motor_apply 32 + drive 88
+  + set_wheel 24 + gpio_write 16  =  248 B  /  1024 B
+```
+
+#### Kết quả build sau bước 4
+
+| Bản | Flash | RAM | So với bước 3 |
+| --- | --- | --- | --- |
+| Debug | 26 092 B (**39,81 %**) | 8 880 B (**43,36 %**) | Flash +2 424 B, RAM +88 B |
+| Release | 22 152 B (**33,80 %**) | 8 880 B (**43,36 %**) | Flash +2 104 B |
+
+`check_constraints.sh` → **Tất cả đạt**. Không warning từ mã dự án.
+
+#### ⚠️ Lỗ hổng còn lại: chưa có watchdog
+
+Nếu MCU treo **trong lúc** STBY đang cao và một chiều đang được dẫn động, motor sẽ chạy
+mãi. Không có lựa chọn nào trong `motor_apply()` bịt được lỗ này — nó cần **IWDG**
+(`HAL_IWDG_MODULE_ENABLED` hiện **chưa bật**). Đây là việc phải làm **trước khi cấp nguồn
+động lực lần đầu**, không phải sau.
+
+#### Kiểm chứng trên board — CHƯA CHẠY
+
+**Điều kiện bắt buộc trước khi cấp nguồn động lực:**
+
+1. **Điện trở kéo xuống 10k trên STBY (PB5)** ra GND.
+2. **Kê bánh khỏi mặt đất.** Mọi phép thử đầu tiên làm với xe treo.
+3. Đo bằng đồng hồ: sau reset, STBY phải ở mức thấp **trước khi** firmware chạy.
+
+**Trình tự thử:**
+
+4. Chưa cấp nguồn VM: dùng oscilloscope xem PA6/PA7 — phải là 20 kHz, duty đúng
+   `DRIVE_SPEED_PERCENT = 35 %` khi FSM ở `CAR_FORWARD`.
+5. `motor_st=` trong log: `3` (`NOT_READY`) khi safety chưa clear, `0` (`OK`) khi đã clear.
+6. **Thử từng bánh:** tạm đặt `TURN_SPEED_PERCENT = 0` để tách một bánh, xác nhận chiều
+   quay khớp mong đợi. Sai thì **đảo dây**, không sửa code.
+7. **Đo thời gian từ lúc nhấn STOP đến khi PWM về 0** — `CLAUDE.md` yêu cầu chứng minh
+   con số này trước khi có motor thật. Dùng oscilloscope 2 kênh: nút bấm và PA6.
+   Kỳ vọng ≤ 1 chu kỳ `tSafety` + 1 chu kỳ `tDecision` = **30 ms**.
+8. **Kiểm tra cửa sổ đảo chiều:** ép FSM đi từ `FORWARD` sang `TURN_LEFT`, xem trên scope
+   có đúng `MOTOR_DIRECTION_BRAKE_MS = 60 ms` ở trạng thái IN1=IN2=H trước khi bánh trái
+   đảo chiều không.
+9. **Đo `d_coast` và `v` thật** rồi tính lại `D_STOP_MM` — hiện vẫn là `[DO]`.
 
 ### Bước 5 — Phụ trợ, không chặn luồng chính ⬜
 

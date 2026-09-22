@@ -17,6 +17,13 @@
 /* Nhip in trang thai dinh ky cua tLog. Khong phai deadline dieu khien. */
 #define LOG_HEARTBEAT_MS 1000U
 
+/* Ket qua lan goi motor_apply() gan nhat, do tDecision ghi va tLog doc.
+ * Chi de quan sat: no cho thay duong an toan co dang cat lenh motor hay khong
+ * (STATUS_NOT_READY = bi cat, STATUS_OK = da dat ra phan cung).
+ * uint32_t ghi/doc nguyen tu tren Cortex-M3 va khong co quyet dinh nao dua tren
+ * bien nay, nen khong can mailbox hay khoa. */
+static volatile uint32_t last_motor_status = (uint32_t)STATUS_NOT_READY;
+
 volatile uint32_t g_assert_line;
 const char * volatile g_assert_file;
 static StaticTask_t task_controls[APP_TASK_COUNT];
@@ -123,7 +130,7 @@ static void task_decision(void *argument)
      * motor_apply() dung mot lan. Diem block duy nhat la dong xTaskDelayUntil.
      */
     for (;;) {
-        (void)robot_car_update(timebase_now_ms());
+        last_motor_status = (uint32_t)robot_car_update(timebase_now_ms());
         (void)xTaskDelayUntil(&last_wake, pdMS_TO_TICKS(DECISION_TARGET_PERIOD_MS));
     }
 }
@@ -159,6 +166,8 @@ static void task_log(void *argument)
                 }
                 (void)uart_log_u32("imu_st=", (uint32_t)imu.status);
             }
+            /* 0 = OK (lenh da ra phan cung), 3 = NOT_READY (duong an toan da cat) */
+            (void)uart_log_u32("motor_st=", last_motor_status);
             previous_bits = bits;
             since_heartbeat_ms = 0U;
         }

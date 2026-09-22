@@ -36,6 +36,14 @@
 #define BUTTON_DEBOUNCE_MS 25U
 #define DRIVE_SPEED_PERCENT 35U
 #define TURN_SPEED_PERCENT 30U
+/* [DO] Short-brake window inserted by motor_tb6612 before any forward<->reverse
+ * change. Two separate reasons, both unmeasured:
+ *   electrical  - let the H-bridge current decay before the opposite arm turns on
+ *   mechanical  - the wheel is still spinning; reversing torque into it is a shock
+ * Measure the real decay/settle time before trusting this number. Too small is
+ * a stress on the driver and gearbox, too large is a slow avoidance manoeuvre.
+ */
+#define MOTOR_DIRECTION_BRAKE_MS 60U
 /* [DO] cos^2(TILT_LIMIT_DEG) as an exact integer ratio: cos^2(30 deg) = 3/4.
  * The ratio is NOT derived from TILT_LIMIT_DEG at compile time; change both
  * together. It lets the tilt test compare squared accelerometer components
