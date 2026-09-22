@@ -63,11 +63,17 @@ add_library(stm32_hal STATIC
   ${TP}/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_flash_ex.c
   ${TP}/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_gpio.c
   ${TP}/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_gpio_ex.c
+  ${TP}/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_i2c.c
   ${TP}/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_pwr.c
   ${TP}/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_rcc.c
   ${TP}/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_rcc_ex.c
+  ${TP}/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_tim.c
+  ${TP}/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_tim_ex.c
   ${TP}/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_uart.c
 )
+# Danh sach tren phai khop voi cac HAL_*_MODULE_ENABLED trong
+# Core/Inc/stm32f1xx_hal_conf.h. Them file ma quen bat module (hoac nguoc lai)
+# thi file .c bien dich ra rong va loi chi lo ra luc link.
 target_include_directories(stm32_hal SYSTEM PUBLIC
   ${TP}/CMSIS/Core/Include
   ${TP}/CMSIS/Device/ST/STM32F1xx/Include

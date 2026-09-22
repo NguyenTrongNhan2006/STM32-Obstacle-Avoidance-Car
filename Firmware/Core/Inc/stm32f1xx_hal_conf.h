@@ -5,7 +5,13 @@
  * MOC A: chi bat 8 module can cho Core + gpio + timebase + uart_debug:
  *   CORTEX DMA EXTI FLASH GPIO PWR RCC UART
  * Cac module con lai bi comment de khong keo code chet vao 64 KB flash.
- * Moc C se bat TIM (pwm/motor), moc F se bat I2C (mpu6050).
+ *
+ * BUOC 0 (mo duong build): bat them TIM va I2C.
+ *   TIM -> TIM2 input capture Echo (timebase, buoc 2) va TIM3 PWM motor (pwm, buoc 4)
+ *   I2C -> I2C1 cho MPU6050 (i2c + mpu6050, buoc 3)
+ * Hai module nay duoc bat TRUOC khi viet driver de handler ngat co the dinh
+ * tuyen ve module chu so huu; ban than ngat ngoai vi van CHUA duoc bat trong
+ * NVIC. Xem About/IMPLEMENTATION_STATUS.md.
  *
  * HSE_VALUE: template tu chon 8 MHz cho dong F103 (25 MHz chi danh cho
  * F105/F107 connectivity line). 8 MHz khop voi thach anh tren board va la
@@ -64,7 +70,7 @@ extern "C" {
 #define HAL_FLASH_MODULE_ENABLED
 #define HAL_GPIO_MODULE_ENABLED
 /* #define HAL_HCD_MODULE_ENABLED */
-/* #define HAL_I2C_MODULE_ENABLED */
+#define HAL_I2C_MODULE_ENABLED
 /* #define HAL_I2S_MODULE_ENABLED */
 /* #define HAL_IRDA_MODULE_ENABLED */
 /* #define HAL_IWDG_MODULE_ENABLED */
@@ -79,7 +85,7 @@ extern "C" {
 /* #define HAL_SMARTCARD_MODULE_ENABLED */
 /* #define HAL_SPI_MODULE_ENABLED */
 /* #define HAL_SRAM_MODULE_ENABLED */
-/* #define HAL_TIM_MODULE_ENABLED */
+#define HAL_TIM_MODULE_ENABLED
 #define HAL_UART_MODULE_ENABLED
 /* #define HAL_USART_MODULE_ENABLED */
 /* #define HAL_WWDG_MODULE_ENABLED */

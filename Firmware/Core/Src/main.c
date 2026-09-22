@@ -8,7 +8,13 @@
 #include "gpio.h"
 #include "timebase.h"
 #include "uart_debug.h"
+#include "buzzer.h"
 #include "robot_car.h"
+#include "safety_monitor.h"
+#include "sensor_manager.h"
+
+/* Nhip in trang thai dinh ky cua tLog. Khong phai deadline dieu khien. */
+#define LOG_HEARTBEAT_MS 1000U
 
 volatile uint32_t g_assert_line;
 const char * volatile g_assert_file;
@@ -74,35 +80,95 @@ void SystemClock_Config(void)
     configASSERT(HAL_RCC_ClockConfig(&clk, FLASH_LATENCY_2) == HAL_OK);
     configASSERT(SystemCoreClock == BOARD_SYSCLK_HZ);
 }
+/* Ca nam task dung xTaskDelayUntil chu khong phai vTaskDelay: chu ky duoc tinh
+ * tu lan danh thuc truoc, nen khong troi theo thoi gian xu ly cua than vong lap.
+ *
+ * Chu ky lay tu nhom *_TARGET_/SENSOR_* trong app_config.h, khong phai nhom
+ * TASK_*_PERIOD_MS (nhom do la sleep tam cua skeleton). Cac hang so nay van la
+ * [DO] - phai do lai response time truoc khi coi la da chot.
+ *
+ * Moi ham duoc goi o day deu con tra STATUS_NOT_READY o mot phan duong di.
+ * Do la trang thai dung: lop App da co logic, con driver thi chua.
+ */
 static void task_safety(void *argument)
 {
+    TickType_t last_wake = xTaskGetTickCount();
+
     (void)argument;
-    /* IMPLEMENT (Nhan): STOP/fault latch and freshness. No motor activation yet. */
-    for (;;) { vTaskDelay(pdMS_TO_TICKS(TASK_SAFETY_PERIOD_MS)); }
+    for (;;) {
+        (void)safety_update(timebase_now_ms());
+        (void)xTaskDelayUntil(&last_wake, pdMS_TO_TICKS(SAFETY_TARGET_PERIOD_MS));
+    }
 }
 static void task_sensor(void *argument)
 {
+    TickType_t last_wake = xTaskGetTickCount();
+
     (void)argument;
-    /* IMPLEMENT (Hung): independent sample deadlines and copied mailboxes. */
-    for (;;) { vTaskDelay(pdMS_TO_TICKS(TASK_SENSOR_PERIOD_MS)); }
+    /* Chay o nhip nhanh nhat trong hai nguon (IMU 10 ms). Deadline rieng cua
+     * range (60 ms) do chinh sensor_manager_update() giu, khong phai task.
+     */
+    for (;;) {
+        (void)sensor_manager_update(timebase_now_ms());
+        (void)xTaskDelayUntil(&last_wake, pdMS_TO_TICKS(SENSOR_IMU_PERIOD_MS));
+    }
 }
 static void task_decision(void *argument)
 {
+    TickType_t last_wake = xTaskGetTickCount();
+
     (void)argument;
-    /* IMPLEMENT (Nhan): nonblocking FSM and robot_car_update. */
-    for (;;) { vTaskDelay(pdMS_TO_TICKS(TASK_DECISION_PERIOD_MS)); }
+    /* robot_car_update() khong block: no chup mailbox, chay FSM roi goi
+     * motor_apply() dung mot lan. Diem block duy nhat la dong xTaskDelayUntil.
+     */
+    for (;;) {
+        (void)robot_car_update(timebase_now_ms());
+        (void)xTaskDelayUntil(&last_wake, pdMS_TO_TICKS(DECISION_TARGET_PERIOD_MS));
+    }
 }
 static void task_log(void *argument)
 {
+    TickType_t last_wake = xTaskGetTickCount();
+    uint32_t previous_bits = UINT32_MAX;    /* gia tri khong the xay ra -> in ngay lan dau */
+    uint32_t since_heartbeat_ms = 0U;
+
     (void)argument;
-    /* IMPLEMENT (Hung): bounded telemetry; sole runtime UART writer. */
-    for (;;) { vTaskDelay(pdMS_TO_TICKS(TASK_LOG_PERIOD_MS)); }
+    /* Writer UART duy nhat luc runtime. In khi egSafety doi, cong them nhip
+     * dinh ky de biet he thong con song. HAL_UART_Transmit la busy-wait chu
+     * khong phai block cua RTOS, nen giu luong log thap va task nay o priority 0.
+     */
+    for (;;) {
+        const uint32_t bits =
+            (egSafety != NULL) ? (uint32_t)xEventGroupGetBits(egSafety) : 0U;
+
+        since_heartbeat_ms += TASK_LOG_PERIOD_MS;
+        if ((bits != previous_bits) || (since_heartbeat_ms >= LOG_HEARTBEAT_MS)) {
+            sample_t range;
+            imu_sample_t imu;
+
+            (void)uart_log_u32("safety=", bits);
+            if (sensor_manager_get_latest(&range, &imu) == STATUS_OK) {
+                (void)uart_log_u32("range_st=", (uint32_t)range.status);
+                (void)uart_log_u32("imu_st=", (uint32_t)imu.status);
+            }
+            previous_bits = bits;
+            since_heartbeat_ms = 0U;
+        }
+        (void)xTaskDelayUntil(&last_wake, pdMS_TO_TICKS(TASK_LOG_PERIOD_MS));
+    }
 }
 static void task_buzzer(void *argument)
 {
+    TickType_t last_wake = xTaskGetTickCount();
+
     (void)argument;
-    /* IMPLEMENT (Hung): deadline-based patterns; must block/yield at priority 0. */
-    for (;;) { vTaskDelay(pdMS_TO_TICKS(TASK_BUZZER_PERIOD_MS)); }
+    /* buzzer_update() chi day deadline cua mau coi roi tra ve ngay - khong bao
+     * gio duoc cho het thoi luong mot tieng bip trong than vong lap nay.
+     */
+    for (;;) {
+        (void)buzzer_update(timebase_now_ms());
+        (void)xTaskDelayUntil(&last_wake, pdMS_TO_TICKS(TASK_BUZZER_PERIOD_MS));
+    }
 }
 int main(void)
 {

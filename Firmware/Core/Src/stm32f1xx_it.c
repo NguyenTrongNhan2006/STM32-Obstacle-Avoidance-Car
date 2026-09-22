@@ -2,6 +2,8 @@
 #include "stm32f1xx_hal.h"
 #include "FreeRTOS.h"
 #include "task.h"
+#include "i2c.h"
+#include "timebase.h"
 void xPortSysTickHandler(void);
 void SysTick_Handler(void)
 {
@@ -12,10 +14,21 @@ void SysTick_Handler(void)
     }
 }
 /* SVC/PendSV are defined directly by port.c using FreeRTOSConfig aliases.
- * TO DO: route each enabled peripheral IRQ to its module owner before enabling it.
+ * TO DO: route each remaining peripheral IRQ to its module owner before enabling it.
  * Traps are bring-up diagnostics, not the final fault-handling implementation.
  */
 #define UNIMPLEMENTED_IRQ(name) void name(void) { configASSERT(0); }
+
+/* Cac IRQ da co chu so huu. File nay CHI dinh tuyen — no khong doc/ghi thanh
+ * ghi cua ngoai vi, vi lam the se tao chu so huu thu hai cho timer/bus do.
+ *
+ * Dinh tuyen phai co TRUOC khi bat ngat trong NVIC. Neu con la
+ * UNIMPLEMENTED_IRQ, ngat dau tien se roi vao configASSERT(0) va treo may.
+ * Hien tai chua ngat ngoai vi nao duoc bat, nen ba handler duoi day chua chay.
+ */
+void TIM2_IRQHandler(void)     { timebase_irq_capture(); }   /* Echo capture — buoc 2 */
+void I2C1_EV_IRQHandler(void)  { i2c_irq_event(); }          /* MPU6050      — buoc 3 */
+void I2C1_ER_IRQHandler(void)  { i2c_irq_error(); }          /* MPU6050      — buoc 3 */
 UNIMPLEMENTED_IRQ(NMI_Handler)
 UNIMPLEMENTED_IRQ(HardFault_Handler)
 UNIMPLEMENTED_IRQ(MemManage_Handler)
@@ -50,11 +63,8 @@ UNIMPLEMENTED_IRQ(TIM1_BRK_IRQHandler)
 UNIMPLEMENTED_IRQ(TIM1_UP_IRQHandler)
 UNIMPLEMENTED_IRQ(TIM1_TRG_COM_IRQHandler)
 UNIMPLEMENTED_IRQ(TIM1_CC_IRQHandler)
-UNIMPLEMENTED_IRQ(TIM2_IRQHandler)
 UNIMPLEMENTED_IRQ(TIM3_IRQHandler)
 UNIMPLEMENTED_IRQ(TIM4_IRQHandler)
-UNIMPLEMENTED_IRQ(I2C1_EV_IRQHandler)
-UNIMPLEMENTED_IRQ(I2C1_ER_IRQHandler)
 UNIMPLEMENTED_IRQ(I2C2_EV_IRQHandler)
 UNIMPLEMENTED_IRQ(I2C2_ER_IRQHandler)
 UNIMPLEMENTED_IRQ(SPI1_IRQHandler)
