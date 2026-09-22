@@ -29,7 +29,12 @@ status_t gpio_init(void)
     cfg.Mode = GPIO_MODE_INPUT;
     cfg.Pull = GPIO_PULLUP;
     HAL_GPIO_Init(BUTTON_PORT, &cfg);
-    /* TO DO: configure Echo, PWM and bus pins in their owning modules. */
+    /* Cac chan con lai do chinh module so huu chung cau hinh, khong phai o day:
+     *   PA0  Echo      -> timebase (TIM2 input capture)
+     *   PA6  PA7 PWM   -> pwm      (TIM3)
+     *   PB6  PB7 I2C   -> i2c      (I2C1)
+     *   PA9  PA10 UART -> uart_debug (USART1)
+     * Mot chan, mot chu so huu — gpio_init() chi lo cac chan GPIO thuan tuy. */
     return STATUS_OK;
 }
 status_t gpio_read(gpio_pin_t pin, bool *high)

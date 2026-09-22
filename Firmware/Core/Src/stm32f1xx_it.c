@@ -2,6 +2,7 @@
 #include "stm32f1xx_hal.h"
 #include "FreeRTOS.h"
 #include "task.h"
+#include "exti.h"
 #include "i2c.h"
 #include "timebase.h"
 void xPortSysTickHandler(void);
@@ -29,6 +30,7 @@ void SysTick_Handler(void)
 void TIM2_IRQHandler(void)     { timebase_irq_capture(); }   /* Echo capture — buoc 2 */
 void I2C1_EV_IRQHandler(void)  { i2c_irq_event(); }          /* MPU6050      — buoc 3 */
 void I2C1_ER_IRQHandler(void)  { i2c_irq_error(); }          /* MPU6050      — buoc 3 */
+void EXTI9_5_IRQHandler(void)  { exti_irq_capture(); }       /* Nut PA8      — buoc 5 */
 UNIMPLEMENTED_IRQ(NMI_Handler)
 UNIMPLEMENTED_IRQ(HardFault_Handler)
 UNIMPLEMENTED_IRQ(MemManage_Handler)
@@ -58,7 +60,6 @@ UNIMPLEMENTED_IRQ(USB_HP_CAN1_TX_IRQHandler)
 UNIMPLEMENTED_IRQ(USB_LP_CAN1_RX0_IRQHandler)
 UNIMPLEMENTED_IRQ(CAN1_RX1_IRQHandler)
 UNIMPLEMENTED_IRQ(CAN1_SCE_IRQHandler)
-UNIMPLEMENTED_IRQ(EXTI9_5_IRQHandler)
 UNIMPLEMENTED_IRQ(TIM1_BRK_IRQHandler)
 UNIMPLEMENTED_IRQ(TIM1_UP_IRQHandler)
 UNIMPLEMENTED_IRQ(TIM1_TRG_COM_IRQHandler)

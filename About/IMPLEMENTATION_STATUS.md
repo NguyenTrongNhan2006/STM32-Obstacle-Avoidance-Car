@@ -542,11 +542,148 @@ watchdog_refresh 8 = 104 B / 1024 B`.
 6. Chạy liên tục ≥ 30 phút không có reset nào — chứng minh cửa sổ 100 ms đủ biên với
    LSI thật của con chip này.
 
-### Bước 5 — Phụ trợ, không chặn luồng chính ⬜
+### Bước 5 — Phụ trợ ✅ CODE XONG, CHƯA THỬ TRÊN BOARD
 
-- [ ] `buzzer.c` — xác nhận loại active/passive và tầng transistor trước
-- [ ] `exti.c` — chỉ cần nếu muốn phản ứng nút nhanh hơn polling 10 ms
-- [ ] `uart_debug_read` — chỉ khi thực sự cần giao thức lệnh
+- [x] `buzzer.c` — mẫu còi theo state, non-blocking qua `tBuzzer`
+- [x] `exti.c` — EXTI8 cho nút PA8, cạnh xuống, ISR chỉ đặt một cờ
+- [x] `uart_debug_read()` — không block khi đường truyền im, có timeout khi đang nhận
+- [x] `stm32f1xx_it.c` — định tuyến `EXTI9_5_IRQHandler`
+- [ ] **Thử trên board** — CHƯA LÀM
+
+#### Buzzer — không phát được cao độ
+
+`board_config.h` ghi *"[DO] active buzzer"*. Buzzer active tự sinh dao động bên trong,
+firmware chỉ đóng/ngắt nguồn cho nó ⇒ **chọn cao độ là việc không làm được**. Các mẫu
+chỉ khác nhau ở nhịp, độ dài tiếng và khoảng lặng.
+
+Muốn tone thật phải đổi sang **buzzer passive** + một timer PWM. TIM2 đang đo echo,
+TIM3 đang chạy motor, nên ứng viên duy nhất là **TIM4 (còn trống)** — đó là quyết định
+về quyền sở hữu timer, phải chốt trong `board_config.h` trước.
+
+| State | Mẫu | Nội dung |
+| --- | --- | --- |
+| `CAR_IDLE` | `BUZZER_SILENT` | tắt |
+| `CAR_FORWARD` / `TURN_*` / `CHECK` | `BUZZER_START` | 100 ms mỗi 2 s — báo "xe đang sống và đang chạy" |
+| `CAR_STOP` | `BUZZER_OBSTACLE` | hai tiếng ngắn rồi nghỉ 700 ms |
+| `CAR_FAULT` | `BUZZER_FAULT` | 200 ms bật / 200 ms tắt, đều và không dứt |
+
+**Độ phân giải = `TASK_BUZZER_PERIOD_MS` = 100 ms**, nên mọi bước trong mẫu bắt buộc là
+bội của 100 ms. Có `_Static_assert` giữ luật này — đổi chu kỳ `tBuzzer` là lỗi biên dịch
+chứ không phải mẫu còi lệch âm thầm.
+
+`robot_car` chỉ **ghi ý định** qua `buzzer_set()`; `tBuzzer` mới là task chạm vào chân.
+Một writer, một reader, biến enum vừa một word ⇒ ghi/đọc nguyên tử trên Cortex-M3.
+
+#### EXTI là đường bổ sung, không thay thế polling
+
+`safety_monitor` vẫn đọc nút qua `button_read()` ở nhịp 10 ms với chống dội bằng phần
+mềm, và **đó vẫn là nguồn sự thật duy nhất** cho STOP/rearm.
+
+Nút dội hàng chục lần trong vài ms ⇒ EXTI sinh từng ấy ngắt. ISR ở đây **chỉ đặt một cờ**
+— không đếm, không phân biệt nhấn với dội, và không biết hệ thống đang bị inhibit hay
+không. Việc phân biệt STOP với rearm đòi hỏi trạng thái, và trạng thái đó thuộc
+`safety_monitor`.
+
+> ⚠️ `exti_read_pending()` **hiện chưa có ai tiêu thụ**. Module được khởi tạo và sẵn
+> sàng; nối vào đâu là quyết định khi thực sự cần phản ứng nhanh hơn 10 ms.
+
+#### `uart_debug_read()` — và giới hạn của nó
+
+Không block khi đường truyền im (trả `NOT_READY` ngay nếu `RXNE` trống), chỉ chờ có biên
+theo `timeout_ms` khi đã bắt đầu có dữ liệu. Xoá cờ `ORE` trước mỗi lần đọc — một lần
+tràn duy nhất mà không xoá sẽ làm đường nhận **chết hẳn**.
+
+> ⚠️ Vẫn là polling, **không có ring buffer**. Byte đến trong lúc không ai gọi hàm này
+> sẽ bị mất. Một giao thức lệnh thật sự phải dùng ngắt hoặc DMA kèm ring buffer.
+
+#### Kết quả build sau bước 5
+
+| Bản | Flash | RAM |
+| --- | --- | --- |
+| Debug | 27 360 B (**41,75 %**) | 8 944 B (**43,67 %**) |
+| Release | 23 252 B (**35,48 %**) | 8 936 B (**43,63 %**) |
+
+`check_constraints.sh` → **Tất cả đạt**. Không warning từ mã dự án.
+
+---
+
+## 6. Tổng kết — trạng thái sau bước 0→5
+
+**Không còn `STATUS_NOT_READY` nào là stub.** Mọi `NOT_READY` còn lại đều mang nghĩa thật
+("chưa khởi tạo", "chưa đến hạn", "đang đo", "phần cứng không trả lời").
+
+| Tầng | Module | Trạng thái |
+| --- | --- | --- |
+| Core | `main`, `stm32f1xx_it` | ✅ boot, clock 72 MHz, 5 task, SysTick wrapper, 4 IRQ đã định tuyến |
+| App | `robot_car`, `obstacle_avoidance`, `safety_monitor`, `sensor_manager` | ✅ |
+| Devices | `motor_tb6612`, `ultrasonic_hcsr04`, `mpu6050`, `button`, `status_led`, `buzzer` | ✅ |
+| MCAL | `gpio`, `timebase`, `pwm`, `i2c`, `exti`, `uart_debug`, `watchdog` | ✅ |
+
+**Ngân sách:** Flash 35,5 % (Release) / 41,8 % (Debug); RAM 43,7 %. Còn **> 11 KB RAM**
+và **> 40 KB Flash** trống.
+
+> 🔴 **Đây là "code xong", KHÔNG phải "firmware đã hoạt động".** Chưa một dòng nào chạy
+> trên phần cứng thật. Mọi con số `[DO]` vẫn là giả định. Tất cả các mục
+> *"Kiểm chứng trên board"* ở trên đều **chưa làm**.
+
+---
+
+## 7. Nạp code và trình tự bật nguồn an toàn
+
+### 7.1 Build và nạp
+
+```sh
+cd Firmware
+cmake --preset debug && cmake --build --preset debug
+bash tools/check_constraints.sh build/debug/obstacle_car.elf
+```
+
+Nạp qua ST-Link (`build/debug/obstacle_car.elf` hoặc `.hex`):
+
+```sh
+openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
+        -c "program build/debug/obstacle_car.elf verify reset exit"
+```
+
+> ⚠️ Sau khi nạp, **IWDG đã được kích hoạt và không thể tắt bằng phần mềm.** Nếu muốn
+> dừng ở breakpoint lâu hơn ~333 ms, phải bật `DBGMCU_IWDG_STOP` trong cấu hình debug
+> của OpenOCD/GDB, nếu không chip sẽ reset ngay khi đang bước từng dòng.
+
+### 7.2 🔴 Checklist TRƯỚC KHI CẮM PIN
+
+Làm **theo đúng thứ tự**. Không bỏ qua mục nào.
+
+| # | Việc | Vì sao |
+| --- | --- | --- |
+| 1 | **Điện trở kéo xuống 10k từ PB5 (STBY) ra GND.** Đo bằng đồng hồ, không tin bằng mắt. | Không có nó thì trong cửa sổ reset STBY thả nổi và hành vi TB6612 **không xác định**. Toàn bộ chuỗi an toàn — kể cả watchdog — phụ thuộc con trở này. |
+| 2 | **Mạch hạ áp cho Echo → PA0.** Đo điện áp tại PA0 khi cảm biến phát: phải ≤ 3,3 V. | **PA0 không phải chân 5V-tolerant.** Cắm thẳng 5V là hỏng chân. |
+| 3 | Kiểm tra MPU6050 chạy ở **3,3 V** và có điện trở kéo lên trên SDA/SCL. | Firmware **không** bật pull-up nội — pull-up yếu của MCU làm sườn tín hiệu xấu đi. |
+| 4 | Xác nhận buzzer có **tầng transistor**, không kéo trực tiếp từ PB12. | Quá dòng chân GPIO. |
+| 5 | Đo thông mạch **GND chung** giữa nguồn động lực và nguồn logic. | Không chung GND thì mức logic giữa MCU và TB6612 không xác định. |
+| 6 | **Kê bánh khỏi mặt đất.** | Mọi phép thử đầu tiên làm với xe treo. |
+
+### 7.3 Trình tự bật nguồn lần đầu
+
+1. **Chỉ cấp nguồn logic** (USB hoặc 3,3 V), **chưa cắm pin động lực**.
+2. Đo PB5 (STBY) ngay sau reset: phải ở **mức thấp**. Nếu nó trôi lên → dừng lại,
+   quay về mục 1 của checklist.
+3. Mở terminal 115200 8N1. Kỳ vọng:
+   `boot: sensing+actuation live, watchdog armed` · `reset_by_wdg=0`
+4. Quan sát 30 giây: `safety=3` (`STOP | SENSOR_FAULT`), LED nháy `LED_IDLE`,
+   `motor_st=3`, **không có reset lặp**.
+5. Cắm cảm biến siêu âm → `range_st=0`, `range_mm=` khớp thước ±10 mm.
+6. Cắm IMU → `imu_st=0`, `safety=1`.
+7. Nhấn nút → `safety=0`, `motor_st=0`. **Xe treo, bánh có thể quay — đây là lúc kiểm
+   tra chiều quay.** Sai chiều thì **đảo dây**, không sửa code.
+8. Chỉ khi các bước trên đều đạt mới **hạ xe xuống đất** và cắm pin động lực.
+
+### 7.4 Ba phép đo phải làm trước khi tin vào ngưỡng
+
+1. **Thời gian từ lúc nhấn STOP đến khi PWM về 0** — `CLAUDE.md` yêu cầu chứng minh con
+   số này. Oscilloscope 2 kênh: nút và PA6. Kỳ vọng ≤ 30 ms.
+2. **`v` và `d_coast` thật** → tính lại `D_STOP_MM` (hiện 250 mm là `[DO]`).
+3. **Hướng lắp IMU** — in raw 3 trục accel, xác nhận `accel_raw[2]` là trục thẳng đứng
+   và dương khi xe nằm phẳng. `imu_upright()` phụ thuộc hoàn toàn vào giả định này.
 
 ---
 

@@ -1,5 +1,6 @@
 #include "robot_car.h"
 #include "app_config.h"
+#include "buzzer.h"
 #include "motor_tb6612.h"
 #include "obstacle_avoidance.h"
 #include "safety_monitor.h"
@@ -29,13 +30,31 @@ static led_pattern_t pattern_for(car_state_t state)
     return (state == CAR_IDLE) ? LED_IDLE : LED_RUNNING;
 }
 
+/* Coi bao theo trang thai, giong den nhung nghe duoc tu xa va khi khong nhin
+ * thay xe. CAR_STOP tach rieng khoi CAR_FAULT: gap vat can la hanh vi binh
+ * thuong, con fault la xe da bo cuoc va dang cho nguoi xac nhan.
+ */
+static buzzer_pattern_t sound_for(car_state_t state)
+{
+    switch (state) {
+    case CAR_FAULT: return BUZZER_FAULT;
+    case CAR_STOP:  return BUZZER_OBSTACLE;
+    case CAR_IDLE:  return BUZZER_SILENT;
+    default:        return BUZZER_START;   /* dang di chuyen: bao cho nguoi xung quanh */
+    }
+}
+
 status_t robot_car_init(void)
 {
     const motor_config_t config = { .is_safe = safety_is_clear_to_run };
+    const buzzer_config_t sound = { .active_high = true };
     if (safety_init() != STATUS_OK || sensor_manager_init() != STATUS_OK ||
         obstacle_avoidance_init(&avoidance) != STATUS_OK) { return STATUS_ERROR; }
     safety_was_clear = false;
     (void)status_led_init();
+    /* [DO] active_high phu thuoc tang transistor: NPN low-side -> true,
+     * PNP high-side -> false. Do bang dong ho truoc khi tin vao mau coi. */
+    (void)buzzer_init(&sound);
     return motor_init(&config);
 }
 
@@ -62,6 +81,8 @@ status_t robot_car_update(uint32_t now_ms)
         (void)obstacle_avoidance_update(&avoidance, &range, &imu, now_ms, &request);
     }
     (void)status_led_set(pattern_for(avoidance.state));
+    /* Chi ghi y dinh; tBuzzer moi la task cham vao chan coi. */
+    (void)buzzer_set(sound_for(avoidance.state));
 
     /* Sole motor command boundary in the App: exactly one call per update, on
      * every path. motor_apply still re-checks the safety predicate itself.

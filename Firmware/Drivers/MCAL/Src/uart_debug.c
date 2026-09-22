@@ -37,11 +37,41 @@ status_t uart_debug_write(const uint8_t *data, size_t length, uint32_t timeout_m
     result = HAL_UART_Transmit(&uart, data, (uint16_t)length, timeout_ms);
     return result == HAL_OK ? STATUS_OK : (result == HAL_TIMEOUT ? STATUS_TIMEOUT : STATUS_ERROR);
 }
+/* Nhan lenh qua UART.
+ *
+ * Khong block khi duong truyen im: neu chua co byte nao trong thanh ghi nhan
+ * thi tra STATUS_NOT_READY ngay, khong cho het timeout_ms. Chi khi da bat dau
+ * co du lieu ham moi cho cho du `capacity` byte, va cho co bien theo timeout_ms.
+ * Nho vay nguoi goi co the poll moi chu ky ma khong dot thoi gian CPU.
+ *
+ * GIOI HAN: van la polling, khong co ring buffer. Byte den trong luc khong ai
+ * goi ham nay se bi mat, va HAL bao ORE. Mot giao thuc lenh that su phai dung
+ * ngat hoac DMA kem ring buffer — khi do doi sang HAL_UART_Receive_IT va giai
+ * phong USART1_IRQHandler khoi bay UNIMPLEMENTED_IRQ.
+ */
 status_t uart_debug_read(uint8_t *data, size_t capacity, uint32_t timeout_ms)
 {
-    if (data == NULL || capacity == 0U || timeout_ms == 0U) { return STATUS_ERROR; }
-    /* IMPLEMENT: bounded RX if a command protocol is later accepted. */
-    return STATUS_NOT_READY;
+    HAL_StatusTypeDef result;
+
+    if (data == NULL || capacity == 0U || capacity > UINT16_MAX || timeout_ms == 0U) {
+        return STATUS_ERROR;
+    }
+    if (!initialized) { return STATUS_NOT_READY; }
+
+    /* Overrun lam co ORE dinh lai va moi lan doc sau do deu bao loi. Xoa truoc
+     * khi thu doc, neu khong mot lan tran duy nhat se lam duong nhan chet han. */
+    if (__HAL_UART_GET_FLAG(&uart, UART_FLAG_ORE) != RESET) {
+        __HAL_UART_CLEAR_OREFLAG(&uart);
+    }
+    if (__HAL_UART_GET_FLAG(&uart, UART_FLAG_RXNE) == RESET) {
+        return STATUS_NOT_READY;   /* duong truyen im — thoat ngay, khong cho */
+    }
+
+    result = HAL_UART_Receive(&uart, data, (uint16_t)capacity, timeout_ms);
+    if (result == HAL_OK) { return STATUS_OK; }
+    /* Nhan thieu byte tinh la TIMEOUT: nguoi goi khong biet duoc bao nhieu byte
+     * da vao buffer, nen khong duoc phep dung du lieu do. */
+    return (result == HAL_TIMEOUT) ? STATUS_TIMEOUT : STATUS_ERROR;
 }
 status_t uart_log(const char *message)
 {

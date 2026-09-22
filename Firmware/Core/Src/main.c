@@ -5,6 +5,7 @@
 #include "task.h"
 #include "queue.h"
 #include "event_groups.h"
+#include "exti.h"
 #include "gpio.h"
 #include "i2c.h"
 #include "timebase.h"
@@ -198,6 +199,7 @@ int main(void)
     const uart_debug_config_t uart_config = { .baud = DEBUG_BAUD, .timeout_ms = UART_TIMEOUT_MS };
     const i2c_config_t bus_config = { .bus_hz = IMU_I2C_SPEED_HZ };
     const watchdog_config_t dog_config = { .timeout_ms = WATCHDOG_TIMEOUT_MS };
+    const exti_config_t button_exti = { .line = 8U, .priority = IRQ_PRIO_BUTTON };
     static const TaskFunction_t functions[APP_TASK_COUNT] = {
         task_safety, task_sensor, task_decision, task_log, task_buzzer
     };
@@ -219,6 +221,10 @@ int main(void)
      * vi va giai phong bus neu no dang ket — khong co giao dich nao, nen mot
      * MPU6050 chua noi day KHONG lam assert nay that bai. */
     configASSERT(i2c_init(&bus_config) == STATUS_OK);
+    /* Duong BO SUNG cho nut bam. safety_monitor van doc nut bang polling co
+     * chong doi o nhip 10 ms va do van la nguon su that; EXTI chi de bat mot
+     * lan nhan rat ngan lot giua hai lan poll. ISR chi dat mot co. */
+    configASSERT(exti_init(&button_exti) == STATUS_OK);
     /* Current device stub intentionally reports NOT_READY, but static App objects exist. */
     app_status = robot_car_init();
     configASSERT(app_status == STATUS_OK || app_status == STATUS_NOT_READY);
