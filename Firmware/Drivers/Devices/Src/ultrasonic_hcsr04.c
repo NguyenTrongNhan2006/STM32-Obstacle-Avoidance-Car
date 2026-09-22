@@ -146,14 +146,26 @@ status_t ultrasonic_read(sample_t *sample)
     /* pulse_us toi da la 65_535 (bo dem 16 bit), nen 65_535 * 1715 = 112_392_525
      * van nam gon trong uint32_t. */
     sample->value = (pulse_us * ULTRASONIC_MM_NUM) / ULTRASONIC_MM_DEN;
-    if (sample->value < ULTRASONIC_MIN_VALID_MM || sample->value > ULTRASONIC_MAX_VALID_MM) {
-        /* Ngoai pham vi tin cay -> danh dau loi. Duoi 20 mm module tra so nhay
-         * lung tung; bao SAMPLE_OK o day se cho FSM mot con so no khong duoc
-         * phep tin. safety_monitor coi moi status khac SAMPLE_OK la fault, tuc
-         * xe dung — do la huong hong dung. */
-        sample->status = SAMPLE_ERROR;
+
+    /* KEP ve pham vi tin cay thay vi bao loi. Chi mat xung Echo hoac qua
+     * ECHO_TIMEOUT_US moi la that bai cua phep do; mot ket qua nam ngoai dai
+     * datasheet van la BANG CHUNG co that ve khoang cach, chi la khong chinh xac.
+     *
+     * Ca hai huong kep deu lech ve phia an toan:
+     *   < 20 mm   -> bao 20 mm. Nam duoi D_STOP_MM nen FSM vao CAR_STOP roi
+     *                quay ne. Bao SAMPLE_ERROR o day se day xe vao CAR_FAULT,
+     *                tuc dung han va phai rearm bang tay — qua nang cho tinh
+     *                huong "vat can rat sat" ma dang le chi can ne.
+     *   > 4000 mm -> bao 4000 mm, tuc GAN hon thuc te. Khong bao gio bao xa hon
+     *                so do duoc, nen khong the tao ra mot "duong trong" gia.
+     */
+    if (sample->value < ULTRASONIC_MIN_VALID_MM) {
+        sample->value = ULTRASONIC_MIN_VALID_MM;
+    } else if (sample->value > ULTRASONIC_MAX_VALID_MM) {
+        sample->value = ULTRASONIC_MAX_VALID_MM;
     } else {
-        sample->status = SAMPLE_OK;
+        /* trong dai tin cay, giu nguyen */
     }
+    sample->status = SAMPLE_OK;
     return STATUS_OK;
 }

@@ -199,13 +199,31 @@ Stack mỗi task là 1 024 B ⇒ biên rất rộng. Vẫn phải đo
 2. Đặt vật cản ở 100 / 300 / 1000 mm, so `range_mm=` với thước — sai số kỳ vọng ±10 mm.
 3. Che kín cảm biến hoặc rút dây Echo → `range_st=2` (`SAMPLE_TIMEOUT`) trong vòng
    ~31 ms, **không treo**, `range_mm=` không được in.
-4. Đưa vật cản sát < 20 mm → `range_st=3` (`SAMPLE_ERROR`), không phải `SAMPLE_OK`.
+4. Đưa vật cản sát < 20 mm → `range_st=0` (`SAMPLE_OK`) với `range_mm=20` — giá trị bị
+   **kẹp**, không báo lỗi (xem dưới).
 5. `range_age_ms=` phải dao động trong khoảng 0–70 ms; vượt `SENSOR_STALE_MS = 200`
    nghĩa là chuỗi đo đang kẹt.
 
-> ⚠️ `SAMPLE_TIMEOUT` **tuyệt đối không** được quy về `0 mm` hay một khoảng cách rất xa.
-> Hiện tại `value = 0` đi kèm `status = SAMPLE_TIMEOUT`; consumer bắt buộc đọc `status`
-> trước, và `safety_monitor` coi mọi status khác `SAMPLE_OK` là fault.
+#### Chính sách giá trị ngoài dải — đã chốt
+
+Chỉ **mất xung Echo** hoặc **quá `ECHO_TIMEOUT_US` (30 ms)** mới là thất bại của phép đo.
+Một kết quả nằm ngoài dải datasheet vẫn là **bằng chứng có thật** về khoảng cách, chỉ là
+không chính xác — nên nó bị **kẹp** chứ không bị báo lỗi:
+
+| Đo được | Báo ra | Hướng lệch | Hệ quả ở FSM |
+| --- | --- | --- | --- |
+| `< 20 mm` | `20 mm`, `SAMPLE_OK` | — | dưới `D_STOP_MM` → `CAR_STOP` → quay né |
+| `20..4000 mm` | giữ nguyên, `SAMPLE_OK` | — | bình thường |
+| `> 4000 mm` | `4000 mm`, `SAMPLE_OK` | **gần hơn** thực tế | không bao giờ tạo ra "đường trống" giả |
+| mất echo / > 30 ms | `0 mm`, `SAMPLE_TIMEOUT` | — | `range_valid = false` → `CAR_FAULT` |
+
+Kẹp cận dưới thay vì báo `SAMPLE_ERROR` vì báo lỗi sẽ đẩy xe vào `CAR_FAULT` — dừng hẳn
+và phải rearm bằng tay — quá nặng cho tình huống "vật cản rất sát" mà đáng lẽ chỉ cần né.
+
+> ⚠️ `SAMPLE_TIMEOUT` **tuyệt đối không** được quy về `0 mm` hay một khoảng cách rất xa
+> **rồi dùng như phép đo hợp lệ**. Hiện tại `value = 0` đi kèm `status = SAMPLE_TIMEOUT`;
+> consumer bắt buộc đọc `status` trước, và `safety_monitor` coi mọi status khác
+> `SAMPLE_OK` là fault.
 >
 > ⚠️ Xe vẫn **không chạy** sau bước này: thiếu IMU nên `SAFETY_BIT_SENSOR_FAULT` chưa
 > xoá được. Đúng thiết kế — xem §1.
