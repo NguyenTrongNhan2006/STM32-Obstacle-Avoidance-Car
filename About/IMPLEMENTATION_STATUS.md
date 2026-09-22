@@ -228,15 +228,101 @@ và phải rearm bằng tay — quá nặng cho tình huống "vật cản rất
 > ⚠️ Xe vẫn **không chạy** sau bước này: thiếu IMU nên `SAFETY_BIT_SENSOR_FAULT` chưa
 > xoá được. Đúng thiết kế — xem §1.
 
-### Bước 3 — IMU ⬜ *(bắt buộc, trên đường găng — xem §1)*
+### Bước 3 — IMU ✅ CODE XONG, CHƯA ĐO TRÊN BOARD
 
-- [ ] `i2c.c` — I2C1 400 kHz, transaction có timeout `I2C_TIMEOUT_MS = 10`,
-      **stuck-bus recovery** (phát 9 xung SCL khi SDA kẹt thấp)
-- [ ] `mpu6050.c` — `WHO_AM_I == 0x68`, chốt full-scale range, burst read mạch lạc,
-      timestamp lúc chụp mẫu
-- [ ] `sensor_manager.c` — nối nhánh IMU, deadline `SENSOR_IMU_PERIOD_MS = 10`
-- [ ] **Kiểm chứng:** nghiêng xe > 30° → `TILT_FAULT`; rút dây I2C → `SENSOR_FAULT`,
-      không phải "OK giả". Sau bước này rearm mới xoá được `SENSOR_FAULT`.
+- [x] `i2c.c` — I2C1 400 kHz (`IMU_I2C_SPEED_HZ` mới trong `board_config.h`),
+      transaction có timeout `I2C_TIMEOUT_MS = 10`
+- [x] **Stuck-bus recovery** — phát tối đa 9 xung SCL khi SDA kẹt thấp, rồi phát STOP
+- [x] `mpu6050.c` — `WHO_AM_I == 0x68`, đánh thức + DLPF 44 Hz + 125 Hz + ±250 °/s + ±2 g,
+      burst read 14 byte, timestamp lúc bắt đầu giao dịch
+- [x] `mpu6050_calibrate()` — ước lượng bias gyro, **từ chối nếu phát hiện chuyển động**
+- [x] `sensor_manager.c` — nhánh IMU ở nhịp `SENSOR_IMU_PERIOD_MS = 10`, tự khởi tạo lại
+      mỗi 500 ms khi driver báo chưa sẵn sàng
+- [ ] **Kiểm chứng trên board** — CHƯA CHẠY
+
+#### Tilt nằm ở đâu — và vì sao không đặt trong `mpu6050.c`
+
+`mpu6050.c` **chỉ trả raw signed + timestamp + status**. Quyết định "nghiêng bao nhiêu
+thì dừng" thuộc `safety_monitor.c :: imu_upright()`, nơi sở hữu các bit inhibit.
+`IMPLEMENTATION_GUIDE.md` §5 đã chốt điều này: *"Việc quyết định nghiêng quá mức thì
+dừng thuộc `safety_monitor`, không thuộc lớp I2C."*
+
+Thêm một hàm tilt vào `mpu6050.c` sẽ **nhân đôi** logic đã có và đặt chính sách vào lớp
+thiết bị. Chuỗi hiện tại đã đầy đủ: `mpu6050_read` → `qImuMailbox` →
+`safety_update` → `imu_upright` → `SAFETY_BIT_TILT_FAULT`.
+
+Phép kiểm tra dùng **tỉ số bình phương** `az² / (ax²+ay²+az²) ≥ 3/4`, nên thang đo
+±2 g cấu hình ở bước này **không ảnh hưởng** kết quả — đổi full-scale không làm sai.
+
+#### `i2c_read`/`i2c_write` là bounded-blocking, không phải non-blocking
+
+Chữ ký hàm buộc phải vậy: chúng nhận buffer ra và trả kết quả ngay trong một lần gọi,
+nên không có chỗ để báo "đang chạy". Đổi sang non-blocking thật cần tách arm/poll như
+`timebase_capture_arm()`.
+
+Chi phí thực tế: burst 14 byte @400 kHz ≈ **0,4 ms**; worst case là `I2C_TIMEOUT_MS = 10 ms`
+khi bus hỏng. Người gọi là `tSensor` (priority 2):
+
+- `tSafety` (priority 4) vẫn preempt được ngay ⇒ **đường an toàn không bị trễ**
+- `tDecision` (priority 1) có thể bị trễ tới 10 ms trên chu kỳ 20 ms của nó
+
+Nếu đo được trễ thật và thấy không chấp nhận được: chuyển sang `HAL_I2C_Mem_Read_IT`
++ semaphore từ `i2c_irq_event()` — ISR đã được định tuyến sẵn từ bước 0. Hiện **ngắt
+I2C1 chưa bật trong NVIC**, hai ISR chỉ đóng vai lưới an toàn chống interrupt storm.
+
+#### Hai chính sách đáng chú ý
+
+**Bus lỗi ⇒ thiết bị bị buộc về trạng thái chưa khởi tạo.** Một MPU6050 vừa sụt nguồn
+sẽ quay lại mặc định (đang SLEEP, thang đo khác). Đọc tiếp mà không cấu hình lại sẽ cho
+số liệu vô nghĩa nhưng **trông như thật**. Nên `mpu6050_read()` tự đặt
+`initialized = false` khi giao dịch hỏng, và `sensor_manager` gọi lại `mpu6050_init()`
+(kèm kiểm tra `WHO_AM_I`) tối đa mỗi 500 ms.
+
+**IMU vắng mặt không được làm chết boot.** `sensor_manager_init()` bỏ qua kết quả của
+`mpu6050_init()`. Bắt boot fail ở đó sẽ làm board không khởi động được chỉ vì một sợi
+dây lỏng. `safety_monitor` đã chốt `SAFETY_BIT_SENSOR_FAULT` từ lúc boot nên xe vẫn
+không thể chạy.
+
+#### Kết quả build sau bước 3
+
+| Bản | Flash | RAM | So với bước 2 |
+| --- | --- | --- | --- |
+| Debug | 23 668 B (**36,11 %**) | 8 792 B (**42,93 %**) | Flash +4 388 B, RAM +112 B |
+| Release | 20 048 B (**30,59 %**) | 8 784 B (**42,89 %**) | Flash +3 632 B |
+
+Flash tăng chủ yếu là `stm32f1xx_hal_i2c.c` (~4 KB) — giá của việc dùng HAL blocking
+thay vì tự viết. Đổi lại: xử lý đúng các errata I2C của F1 mà ta không phải tự dò.
+
+`check_constraints.sh` → **Tất cả đạt**. Không warning từ mã dự án.
+
+Stack chain sâu nhất của `tSensor` (từ file `.su`):
+
+```text
+task_sensor 16 + sensor_manager_update 24 + update_imu 40 + mpu6050_read 40
+  + i2c_read 24 + HAL_I2C_Mem_Read 64 + I2C_RequestMemoryRead 48
+  + I2C_WaitOnFlagUntilTimeout 24  =  280 B  /  1024 B
+```
+
+#### Kiểm chứng trên board — CHƯA CHẠY
+
+1. **Trước khi cấp nguồn:** xác nhận MPU6050 chạy ở 3,3 V và có điện trở kéo lên trên
+   SDA/SCL. Firmware **không** bật pull-up nội — pull-up yếu của MCU làm sườn tín hiệu
+   xấu đi chứ không tốt lên.
+2. Cắm IMU → `imu_st=0` (`SAMPLE_OK`) trong log; `safety=` giảm từ `3` xuống `1`
+   (chỉ còn `SAFETY_BIT_STOP`).
+3. Nhấn nút khi cả hai cảm biến hợp lệ → `safety=0`, `safety_is_clear_to_run()` lần đầu
+   trả `true`. **Xe vẫn không chạy** vì `motor_apply()` còn `NOT_READY` (bước 4).
+4. **Nghiêng xe > 30°** → `safety=4` (`SAFETY_BIT_TILT_FAULT`). Đặt lại phẳng rồi nhấn
+   nút → xoá được.
+5. **Rút dây SDA hoặc SCL** → `imu_st=1` hoặc `2`, `safety=2` (`SENSOR_FAULT`) trong
+   vòng ~200 ms. Cắm lại → tự phục hồi trong ≤ 500 ms, **không cần reset**.
+6. **Nối tắt SDA xuống GND rồi reset MCU** → stuck-bus recovery phải gỡ được bus; nếu
+   không, `i2c_init()` vẫn trả OK nhưng mọi giao dịch sẽ `STATUS_TIMEOUT`.
+7. In raw 3 trục accel để **xác nhận `accel_raw[2]` là trục thẳng đứng và dương khi xe
+   nằm phẳng** — giả định `[DO]` của `imu_upright()` phụ thuộc hoàn toàn vào hướng lắp.
+
+> ⚠️ `mpu6050_calibrate()` **chưa được gọi ở đâu**. Nó phải được gọi có chủ đích khi đã
+> biết chắc xe đứng yên, không phải tự động lúc khởi động.
 
 ### Bước 4 — Actuation ⬜ *(sau cùng)*
 
