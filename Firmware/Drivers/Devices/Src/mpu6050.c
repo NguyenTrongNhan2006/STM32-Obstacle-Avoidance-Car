@@ -202,8 +202,12 @@ status_t mpu6050_calibrate_gyro(void)
 int16_t mpu6050_yaw_rate_dps(const imu_sample_t *sample)
 {
     if (sample == NULL || sample->status != SAMPLE_OK) { return 0; }
+    int16_t raw_z = sample->gyro_raw[2];
+    if (raw_z > -GYRO_Z_DEADBAND_LSB && raw_z < GYRO_Z_DEADBAND_LSB) {
+        return 0;
+    }
     /* FS_SEL=0 (+-250 dps) -> 131 LSB/(deg/s) */
-    return (int16_t)(sample->gyro_raw[2] / 131);
+    return (int16_t)(raw_z / 131);
 }
 
 bool mpu6050_tilt_exceeded(const imu_sample_t *sample)

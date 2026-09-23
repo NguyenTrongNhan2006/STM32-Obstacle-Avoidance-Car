@@ -39,6 +39,8 @@
 #define BUTTON_DEBOUNCE_MS 25U
 #define DRIVE_SPEED_PERCENT 35U
 #define TURN_SPEED_PERCENT 30U
+#define MOTOR_RAMP_RATE_PER_MS 3U
+#define GYRO_Z_DEADBAND_LSB 100
 /* [DO] Short-brake window inserted by motor_tb6612 before any forward<->reverse
  * change. Two separate reasons, both unmeasured:
  *   electrical  - let the H-bridge current decay before the opposite arm turns on

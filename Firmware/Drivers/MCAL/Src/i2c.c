@@ -72,16 +72,24 @@ static void release_stuck_bus(void)
     uint32_t clock;
 
     pins_as_gpio_od();
+    recovery_half_period();
 
-    for (clock = 0U; clock < RECOVERY_CLOCKS; ++clock) {
-        if (HAL_GPIO_ReadPin(IMU_I2C_PORT, IMU_SDA_PIN) == GPIO_PIN_SET) { break; }
-        HAL_GPIO_WritePin(IMU_I2C_PORT, IMU_SCL_PIN, GPIO_PIN_RESET);
-        recovery_half_period();
-        HAL_GPIO_WritePin(IMU_I2C_PORT, IMU_SCL_PIN, GPIO_PIN_SET);
-        recovery_half_period();
+    /* Kiem tra neu SDA dang bi slave giu o muc LOW */
+    if (HAL_GPIO_ReadPin(IMU_I2C_PORT, IMU_SDA_PIN) == GPIO_PIN_RESET) {
+        for (clock = 0U; clock < RECOVERY_CLOCKS; ++clock) {
+            HAL_GPIO_WritePin(IMU_I2C_PORT, IMU_SCL_PIN, GPIO_PIN_RESET);
+            recovery_half_period();
+            HAL_GPIO_WritePin(IMU_I2C_PORT, IMU_SCL_PIN, GPIO_PIN_SET);
+            recovery_half_period();
+            if (HAL_GPIO_ReadPin(IMU_I2C_PORT, IMU_SDA_PIN) == GPIO_PIN_SET) {
+                break;
+            }
+        }
     }
 
-    /* STOP: SDA di len trong khi SCL dang o muc cao. */
+    /* Phat dieu kien STOP chuan: SCL=L -> SDA=L -> SCL=H -> SDA=H (SDA di len khi SCL o muc cao) */
+    HAL_GPIO_WritePin(IMU_I2C_PORT, IMU_SCL_PIN, GPIO_PIN_RESET);
+    recovery_half_period();
     HAL_GPIO_WritePin(IMU_I2C_PORT, IMU_SDA_PIN, GPIO_PIN_RESET);
     recovery_half_period();
     HAL_GPIO_WritePin(IMU_I2C_PORT, IMU_SCL_PIN, GPIO_PIN_SET);

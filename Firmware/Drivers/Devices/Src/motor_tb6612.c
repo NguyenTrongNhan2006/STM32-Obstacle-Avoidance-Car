@@ -42,11 +42,50 @@ static wheel_dir_t applied_left = WHEEL_COAST;
 static wheel_dir_t applied_right = WHEEL_COAST;
 static bool brake_window_active;
 static uint32_t brake_started_ms;
+static uint16_t current_duty_per_mille = 0U;
+static uint32_t last_ramp_ms = 0U;
 
 static gpio_pin_t pin_of(GPIO_TypeDef *port, uint16_t pin)
 {
     const gpio_pin_t handle = { .port = port, .pin = pin };
     return handle;
+}
+
+/* Bo loc doc PWM (Slew-rate Limiter): gioi han toc do bien thien d(duty)/dt
+ * de khoi dong mem, triet tieu xung dong gay sut ap pin (Brown-out) va chong truot banh.
+ */
+static uint16_t apply_slew_rate(uint16_t target_duty, uint32_t now_ms)
+{
+    uint32_t dt_ms;
+    uint32_t max_delta;
+
+    if (last_ramp_ms == 0U) {
+        last_ramp_ms = now_ms;
+    }
+    dt_ms = now_ms - last_ramp_ms;
+    last_ramp_ms = now_ms;
+    if (dt_ms > 100U) { dt_ms = 100U; }
+
+    /* MOTOR_RAMP_RATE_PER_MS (3 phan nghin / ms) */
+    max_delta = dt_ms * MOTOR_RAMP_RATE_PER_MS;
+    if (max_delta < 10U) { max_delta = 10U; }
+
+    if (target_duty > current_duty_per_mille) {
+        if ((uint32_t)(target_duty - current_duty_per_mille) > max_delta) {
+            current_duty_per_mille += (uint16_t)max_delta;
+        } else {
+            current_duty_per_mille = target_duty;
+        }
+    } else {
+        /* Giam toc nhanh hon de dam bao cu ly phanh an toan */
+        uint32_t max_decel = max_delta * 2U;
+        if ((uint32_t)(current_duty_per_mille - target_duty) > max_decel) {
+            current_duty_per_mille -= (uint16_t)max_decel;
+        } else {
+            current_duty_per_mille = target_duty;
+        }
+    }
+    return current_duty_per_mille;
 }
 
 static void set_wheel(wheel_dir_t direction, gpio_pin_t in1, gpio_pin_t in2,
@@ -85,6 +124,8 @@ static void enter_safe_state(void)
     applied_left = WHEEL_COAST;
     applied_right = WHEEL_COAST;
     brake_window_active = false;
+    current_duty_per_mille = 0U;
+    last_ramp_ms = 0U;
 }
 
 /* Dat chieu va duty cho ca hai banh roi MOI bat bridge. Nguoc lai se co mot
@@ -201,8 +242,13 @@ status_t motor_apply(motor_cmd_t command, uint8_t speed)
         return STATUS_OK;
     }
 
-    /* speed la phan tram 0..100, pwm_write nhan phan nghin 0..1000. */
-    drive(left, right, (uint16_t)((uint32_t)speed * 10U));
+    /* speed la phan tram 0..100, pwm_write nhan phan nghin 0..1000.
+     * Qua bo loc doc (PWM slew-rate limiter) de khoi dong mem, chong sut ap pin va truot banh. */
+    {
+        uint16_t target_duty = (uint16_t)((uint32_t)speed * 10U);
+        uint16_t ramped_duty = apply_slew_rate(target_duty, now_ms);
+        drive(left, right, ramped_duty);
+    }
     applied_left = left;
     applied_right = right;
     return STATUS_OK;

@@ -93,8 +93,14 @@ status_t obstacle_avoidance_update(avoidance_context_t *context, const sample_t 
         context->last_yaw_update_ms = now_ms;
 
         if (imu->status == SAMPLE_OK) {
+            /* Loc dai chet (Deadband filter) triet tieu troi goc do nhieu tinh */
+            int32_t raw_z = (int32_t)imu->gyro_raw[2];
+            if (raw_z > -GYRO_Z_DEADBAND_LSB && raw_z < GYRO_Z_DEADBAND_LSB) {
+                raw_z = 0;
+            }
+
             /* Closed-loop yaw turn: gyro_raw[2] sensitivity = 131 LSB / (deg/s) */
-            const int32_t rate_mdeg_s = ((int32_t)imu->gyro_raw[2] * 1000) / 131;
+            const int32_t rate_mdeg_s = (raw_z * 1000) / 131;
             const int32_t delta_mdeg = (rate_mdeg_s * (int32_t)dt_ms) / 1000;
 
             if (context->state == CAR_TURN_LEFT) {
