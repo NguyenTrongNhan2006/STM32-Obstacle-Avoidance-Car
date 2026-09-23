@@ -15,6 +15,7 @@
 #include "robot_car.h"
 #include "safety_monitor.h"
 #include "sensor_manager.h"
+#include "mpu6050.h"
 
 /* Nhip in trang thai dinh ky cua tLog. Khong phai deadline dieu khien. */
 #define LOG_HEARTBEAT_MS 1000U
@@ -171,6 +172,10 @@ static void task_log(void *argument)
                                        (uint32_t)(timebase_now_ms() - range.timestamp_ms));
                 }
                 (void)uart_log_u32("imu_st=", (uint32_t)imu.status);
+                if (imu.status == SAMPLE_OK) {
+                    (void)uart_log_u32("yaw_dps=", (uint32_t)(int32_t)mpu6050_yaw_rate_dps(&imu));
+                    (void)uart_log_u32("tilt_fault=", (uint32_t)mpu6050_tilt_exceeded(&imu));
+                }
             }
             /* 0 = OK (lenh da ra phan cung), 3 = NOT_READY (duong an toan da cat) */
             (void)uart_log_u32("motor_st=", last_motor_status);
