@@ -1,0 +1,63 @@
+name: CI Firmware Build & Verification
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build-and-verify:
+    name: Build & Verify Firmware
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install ARM GNU Toolchain and Build Utilities
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi cmake ninja-build make
+
+      - name: Verify Toolchain Installation
+        run: |
+          arm-none-eabi-gcc --version
+          cmake --version
+          ninja --version
+
+      - name: Step 1 - Check Source Constraints (Zero printf, Zero heap, Zero HAL_Delay)
+        run: |
+          chmod +x tools/check_constraints.sh Firmware/tools/check_constraints.sh
+          ./tools/check_constraints.sh
+
+      - name: Step 2 - Build Firmware (Release Preset -Os)
+        run: |
+          cd Firmware
+          cmake --preset release
+          cmake --build --preset release
+
+      - name: Step 3 - Verify ELF Binary Constraints
+        run: |
+          ./tools/check_constraints.sh build/release/obstacle_car.elf
+
+      - name: Step 4 - Report Memory Footprint
+        run: |
+          echo "======================================================"
+          echo "           FIRMWARE MEMORY FOOTPRINT (RELEASE)        "
+          echo "======================================================"
+          arm-none-eabi-size -B Firmware/build/release/obstacle_car.elf
+          echo ""
+          arm-none-eabi-size -A Firmware/build/release/obstacle_car.elf
+          echo "======================================================"
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: stm32-obstacle-car-release-v1.0.0
+          path: |
+            Firmware/build/release/obstacle_car.elf
+            Firmware/build/release/obstacle_car.hex
+            Firmware/build/release/obstacle_car.bin
+          if-no-files-found: error
