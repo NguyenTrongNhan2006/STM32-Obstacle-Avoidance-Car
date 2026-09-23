@@ -13,13 +13,21 @@ Xe tốc độ thấp tự chạy trong khu thử có kiểm soát, phát hiện
 | MCU | STM32F103C8T6 Blue Pill, HSE giả định 8 MHz | Nhân: đọc mã chip, crystal, schematic, thử SWD |
 | Khoảng cách trước | Tạm HC-SR04 từ mô tả “HR-04” | Hưng: ảnh nhãn, điện áp và khoảng đo hợp lệ |
 | IMU | MPU6050 gắn cứng trên xe | Hưng: mã module, nguồn/pull-up I2C, hướng trục và AD0 |
-| Cầu H | TB6612FNG đề xuất, chưa xác nhận mua | Nhân: datasheet, dòng liên tục/đỉnh, dòng kẹt motor |
+| Cầu H | **Chọn TB6612FNG hai kênh cho bản đầu**; chưa xác nhận module đã mua hoặc phù hợp motor thực tế | Nhân: xác nhận module, điện áp và dòng motor; Hưng: review sơ đồ đấu nối và thử STOP |
 | Motor, bánh, chassis | Hai motor DC, chưa chốt thông số | Nhân đo tốc độ/dòng; Hưng hỗ trợ đo và ghi kết quả |
 | Buzzer | Đề xuất active qua transistor | Hưng xác nhận active/passive, dòng/điện áp; thêm bảo vệ phù hợp tải |
 | Nguồn | Nguồn motor và ổn áp logic phù hợp | Cả hai: nối chung GND, bố trí decoupling, kiểm tra sụt áp/nhiễu |
 | Nút, LED, debug | START/STOP, LED board, USB-UART 3.3 V, ST-Link | Nhân bring-up; Hưng kiểm thử |
 
 Đây là đề xuất đấu nối, chưa phải sơ đồ sản xuất. Đưa sơ đồ đã kiểm tra vào `Images/` và ghi revision/date. Không nối motor công suất trực tiếp với GPIO hay nguồn USB của board.
+
+### Quyết định cầu H và điều kiện lắp
+
+Chọn module TB6612FNG có hai kênh và chân STBY để khớp driver/pinout hiện tại, giảm việc đổi kiến trúc trong deadline ba tháng. Theo [datasheet Toshiba](https://toshiba.semicon-storage.com/info/datasheet_en_20141001.pdf?did=10660), VCC logic làm việc trong 2,7–5,5 V (dùng 3,3 V), VM trong 2,5–13,5 V. Dòng 1,2 A/kênh là **giới hạn tuyệt đối**; 3,2 A chỉ là xung đơn tối đa 10 ms, không phải khả năng chạy/kẹt liên tục. Datasheet nêu dòng làm việc tối đa 1,0 A/kênh khi VM ≥ 4,5 V (hoặc 0,4 A khi VM thấp hơn, không PWM). Khả năng nhiệt còn tùy module, hai motor chạy cùng lúc và điều kiện lắp thực tế.
+
+Trước khi nối motor: Nhân ghi mã motor, điện áp danh định, dòng không tải, dòng dưới tải và dòng kẹt; ghi điện áp pin khi đầy và khi tải. Nếu dữ liệu không chứng minh được motor nằm trong giới hạn dòng/nhiệt của TB6612FNG, **đổi cầu H và cập nhật driver/pinout trước khi chạy**, không dựa vào mức 3,2 A như dòng liên tục. Hưng kiểm tra sơ đồ nguồn chung GND, tụ gần module theo datasheet, STBY pull-down ngoài 10 kΩ, cực tính và phép thử STOP trên giá đỡ. Đây là lựa chọn thiết kế, chưa xác nhận tính tương thích với một motor hoặc pack pin cụ thể.
+
+Hai động cơ DC trong bản đầu **không đọc encoder**: PWM là điều khiển tốc độ hở vòng, còn quay theo góc lấy phản hồi gyro Z từ MPU6050. Nếu mua motor có encoder, để ngõ encoder chưa nối tới STM32 trong MVP và ghi rõ loại tín hiệu/điện áp cho phiên bản sau; firmware hiện chưa có chân, timer hay driver quadrature dành cho encoder.
 
 ## Pinout dự kiến — đồng bộ board_config.h
 

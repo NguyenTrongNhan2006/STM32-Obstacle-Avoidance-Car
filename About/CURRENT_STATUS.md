@@ -15,7 +15,8 @@
 
 | Hạng mục | Trạng thái / bằng chứng cần có |
 | --- | --- |
-| Cầu H, motor, nguồn | TB6612 là phương án đã viết code, **chưa chốt linh kiện**. Trước khi đấu motor, xác nhận bridge, dòng motor (kể cả dòng kẹt), nguồn, cực tính và STBY pull-down ngoài. |
+| Cầu H, motor, nguồn | Đã chọn **TB6612FNG cho bản đầu** theo [điều kiện trong kế hoạch](PROJECT_PLAN.md#quyết-định-cầu-h-và-điều-kiện-lắp); chưa xác nhận module/motor/nguồn thực tế. Trước khi đấu motor, đo dòng motor (kể cả dòng kẹt), kiểm tra nguồn, cực tính và STBY pull-down ngoài. |
+| Encoder | Chưa có driver, pinout hay điều khiển tốc độ dùng encoder. PWM hiện là hở vòng; quay theo góc dùng gyro MPU6050. Encoder để sau phiên bản 1. |
 | HC-SR04 Echo | PA0 cần hạ mức 5 V xuống 3,3 V. Đo xung Trigger/Echo, timeout và khoảng cách với vật ở nhiều bề mặt. Main chưa có lọc median. |
 | Hiệu chuẩn IMU | Xác nhận module/AD0, data-ready, thời gian ổn định sau wake, hướng trục và bias qua nhiều lần khởi động. Host test chỉ mô phỏng thanh ghi, chưa chứng minh cảm biến thật. |
 | STOP/heartbeat | Đo từ khi nút/lỗi cảm biến/mất check-in đến lúc STBY thấp. Thử Decision treo trong khi PWM đang chạy trên giá đỡ, rồi thử rearm sau khi phục hồi. |
@@ -30,4 +31,4 @@
 | 27/09–03/10 | Bring-up clock/SWD, đo GPIO/PWM và reset/STBY trên board; đo độ trễ STOP | Đo I2C, Echo, telemetry số có dấu và pattern buzzer; ghi log khi lỗi bus/cảm biến | Có số đo, không chỉ bản build; cập nhật pinout, BOM và ngưỡng `[DO]` |
 | 04–10/10 | Kiểm tra 5 task, stack và đường fault/rearm | Kiểm tra range/tilt/gyro khi motor gây nhiễu | Review chéo trước khi thử xe chạy |
 
-Giữ mốc **MVP 07/11**, **feature freeze 05/12** và deadline **20/12**. Nếu board hoặc cầu H chưa chốt, giữ motor ở trạng thái tắt; phần code đã có không xác nhận pinout đúng với linh kiện sẽ mua. Hai người ghi lại kết quả đo kèm ngày, phần cứng và commit SHA trước khi đánh dấu hoàn thành.
+Giữ mốc **MVP 07/11**, **feature freeze 05/12** và deadline **20/12**. Cầu H đã được chọn trên giấy, nhưng nếu board/module thực tế hoặc thông số motor chưa được xác nhận thì giữ motor ở trạng thái tắt; phần code đã có không xác nhận pinout đúng với linh kiện sẽ mua. Hai người ghi lại kết quả đo kèm ngày, phần cứng và commit SHA trước khi đánh dấu hoàn thành.
