@@ -12,6 +12,8 @@
 #define MPU_REG_CONFIG       0x1AU
 #define MPU_REG_GYRO_CONFIG  0x1BU
 #define MPU_REG_ACCEL_CONFIG 0x1CU
+#define MPU_REG_INT_ENABLE   0x38U
+#define MPU_REG_INT_STATUS   0x3AU
 #define MPU_REG_ACCEL_XOUT_H 0x3BU
 #define MPU_REG_PWR_MGMT_1   0x6BU
 #define MPU_REG_WHO_AM_I     0x75U
@@ -41,11 +43,26 @@
  * cam tren tay. [DO] chua kiem tren cam bien that. */
 #define MPU_CALIB_SAMPLES    64U
 #define MPU_CALIB_MAX_RATE   400
+#define MPU_INT_DATA_READY   0x01U
 
 static uint8_t address;
 static uint32_t timeout_ms;
 static bool initialized;
+static bool calibrated;
 static int16_t gyro_bias[3];
+static int32_t gyro_total[3];
+static uint32_t calib_count;
+
+static void reset_calibration(void)
+{
+    uint32_t axis;
+    calibrated = false;
+    calib_count = 0U;
+    for (axis = 0U; axis < 3U; ++axis) {
+        gyro_bias[axis] = 0;
+        gyro_total[axis] = 0;
+    }
+}
 
 static int16_t be16(const uint8_t *raw)
 {
@@ -75,6 +92,7 @@ status_t mpu6050_init(const mpu6050_config_t *config)
         return STATUS_ERROR;
     }
     initialized = false;
+    reset_calibration();
     address = config->address_7bit;
     timeout_ms = config->timeout_ms;
 
@@ -89,16 +107,18 @@ status_t mpu6050_init(const mpu6050_config_t *config)
         write_register(MPU_REG_CONFIG, MPU_CONFIG_DLPF_44HZ) != STATUS_OK ||
         write_register(MPU_REG_SMPLRT_DIV, MPU_SMPLRT_DIV_125HZ) != STATUS_OK ||
         write_register(MPU_REG_GYRO_CONFIG, MPU_GYRO_FS_250DPS) != STATUS_OK ||
-        write_register(MPU_REG_ACCEL_CONFIG, MPU_ACCEL_FS_2G) != STATUS_OK) {
+        write_register(MPU_REG_ACCEL_CONFIG, MPU_ACCEL_FS_2G) != STATUS_OK ||
+        /* Enable status generation for polling; no MCU interrupt is enabled. */
+        write_register(MPU_REG_INT_ENABLE, MPU_INT_DATA_READY) != STATUS_OK) {
         return STATUS_NOT_READY;
     }
 
-    gyro_bias[0] = 0;
-    gyro_bias[1] = 0;
-    gyro_bias[2] = 0;
     initialized = true;
     return STATUS_OK;
 }
+
+bool mpu6050_is_initialized(void) { return initialized; }
+bool mpu6050_is_calibrated(void) { return initialized && calibrated; }
 
 /* STATUS_OK nghia la DA CO KET LUAN cho lan doc, khong phai la doc duoc:
  * sample->status moi noi du lieu co dung duoc hay khong.
@@ -117,7 +137,7 @@ status_t mpu6050_read(imu_sample_t *sample)
 
     if (sample == NULL) { return STATUS_ERROR; }
     *sample = (imu_sample_t){ .status = SAMPLE_NOT_READY };
-    if (!initialized) { return STATUS_NOT_READY; }
+    if (!initialized || !calibrated) { return STATUS_NOT_READY; }
 
     /* Moc thoi gian lay TRUOC giao dich: som hon thoi diem du lieu thuc su ve,
      * nen mau luon duoc coi la gia hon thuc te mot chut — lech ve phia an toan
@@ -136,6 +156,7 @@ status_t mpu6050_read(imu_sample_t *sample)
          * tiep ma khong cau hinh lai se cho ra so lieu vo nghia nhung trong
          * nhu that. Nguoi goi phai chay lai mpu6050_init(). */
         initialized = false;
+        reset_calibration();
         sample->status = (result == STATUS_TIMEOUT) ? SAMPLE_TIMEOUT : SAMPLE_ERROR;
         return STATUS_OK;
     }
@@ -151,46 +172,59 @@ status_t mpu6050_read(imu_sample_t *sample)
     return STATUS_OK;
 }
 
-/* Uoc luong bias cua gyro khi xe DUNG YEN va tru vao cac lan doc sau.
+/* Moi lan goi chi lay toi da MOT mau moi, neu INT_STATUS bao data-ready.
+ * tSensor goi moi 10 ms; 64 mau tai 125 Hz can it nhat khoang 630 ms.
+ * Khi chua du mau tra NOT_READY va KHONG publish IMU nhu mau hop le.
+ *
+ * Uoc luong bias cua gyro khi xe DUNG YEN va tru vao cac lan doc sau.
  * Tu choi neu phat hien chuyen dong: hieu chuan trong luc xe dang di se hoc
  * nham toc do goc that thanh bias va lam moi phep do sau do sai theo.
  *
  * KHONG cham vao accel: safety_monitor kiem tra nghieng bang ty so binh phuong
  * cac truc, tru bias accel se pha chinh phep do trong luc dung de so.
  *
- * Ham nay CHUA duoc goi o dau. No phai duoc goi co chu dich khi da biet chac
- * xe dung yen, khong phai tu dong luc khoi dong.
+ * Khoi dong va moi lan phuc hoi IMU deu can hieu chuan lai trong luc xe dung
+ * yen. Neu chuyen dong, huy cua so mau; Safety giu inhibit cho den khi thanh
+ * cong va nguoi dung nhan nut rearm.
  */
 status_t mpu6050_calibrate(void)
 {
-    int32_t total[3] = {0, 0, 0};
-    uint32_t count;
+    uint8_t interrupt_status = 0U;
+    uint8_t raw[MPU_BURST_LENGTH];
+    uint32_t axis;
+    int32_t rate[3];
 
     if (!initialized) { return STATUS_NOT_READY; }
-
-    gyro_bias[0] = 0;
-    gyro_bias[1] = 0;
-    gyro_bias[2] = 0;
-
-    for (count = 0U; count < MPU_CALIB_SAMPLES; ++count) {
-        imu_sample_t sample;
-        uint32_t axis;
-
-        if (mpu6050_read(&sample) != STATUS_OK || sample.status != SAMPLE_OK) {
-            return STATUS_NOT_READY;
-        }
-        for (axis = 0U; axis < 3U; ++axis) {
-            const int32_t rate = sample.gyro_raw[axis];
-            if (rate > MPU_CALIB_MAX_RATE || rate < -MPU_CALIB_MAX_RATE) {
-                return STATUS_ERROR;   /* dang chuyen dong -> tu choi hieu chuan */
-            }
-            total[axis] += rate;
-        }
+    if (calibrated) { return STATUS_OK; }
+    if (i2c_read(address, MPU_REG_INT_STATUS, &interrupt_status, 1U,
+                 timeout_ms) != STATUS_OK) {
+        initialized = false;
+        reset_calibration();
+        return STATUS_NOT_READY;
     }
-
-    gyro_bias[0] = (int16_t)(total[0] / (int32_t)MPU_CALIB_SAMPLES);
-    gyro_bias[1] = (int16_t)(total[1] / (int32_t)MPU_CALIB_SAMPLES);
-    gyro_bias[2] = (int16_t)(total[2] / (int32_t)MPU_CALIB_SAMPLES);
+    if ((interrupt_status & MPU_INT_DATA_READY) == 0U) { return STATUS_NOT_READY; }
+    if (i2c_read(address, MPU_REG_ACCEL_XOUT_H, raw, MPU_BURST_LENGTH,
+                 timeout_ms) != STATUS_OK) {
+        initialized = false;
+        reset_calibration();
+        return STATUS_NOT_READY;
+    }
+    rate[0] = be16(&raw[8]);
+    rate[1] = be16(&raw[10]);
+    rate[2] = be16(&raw[12]);
+    for (axis = 0U; axis < 3U; ++axis) {
+        if (rate[axis] > MPU_CALIB_MAX_RATE || rate[axis] < -MPU_CALIB_MAX_RATE) {
+            reset_calibration();
+            return STATUS_ERROR;
+        }
+        gyro_total[axis] += rate[axis];
+    }
+    ++calib_count;
+    if (calib_count < MPU_CALIB_SAMPLES) { return STATUS_NOT_READY; }
+    for (axis = 0U; axis < 3U; ++axis) {
+        gyro_bias[axis] = (int16_t)(gyro_total[axis] / (int32_t)MPU_CALIB_SAMPLES);
+    }
+    calibrated = true;
     return STATUS_OK;
 }
 

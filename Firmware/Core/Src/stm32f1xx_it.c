@@ -25,7 +25,7 @@ void SysTick_Handler(void)
  *
  * Dinh tuyen phai co TRUOC khi bat ngat trong NVIC. Neu con la
  * UNIMPLEMENTED_IRQ, ngat dau tien se roi vao configASSERT(0) va treo may.
- * Hien tai chua ngat ngoai vi nao duoc bat, nen ba handler duoi day chua chay.
+ * TIM2 va EXTI8 da bat NVIC; I2C1 van polling nen hai handler I2C du phong.
  */
 void TIM2_IRQHandler(void)     { timebase_irq_capture(); }   /* Echo capture — buoc 2 */
 void I2C1_EV_IRQHandler(void)  { i2c_irq_event(); }          /* MPU6050      — buoc 3 */

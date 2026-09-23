@@ -1,4 +1,4 @@
-# STM32F103C8T6 Obstacle Avoidance Car (Production Grade)
+# STM32F103C8T6 Obstacle Avoidance Car
 
 [![CI Firmware Build & Verification](https://github.com/NguyenTrongNhan2006/STM32-Obstacle-Avoidance-Car/actions/workflows/ci.yml/badge.svg)](https://github.com/NguyenTrongNhan2006/STM32-Obstacle-Avoidance-Car/actions/workflows/ci.yml)
 [![Platform](https://img.shields.io/badge/Platform-STM32F103C8T6%20(ARM%20Cortex--M3%20%40%2072MHz)-blue.svg)](https://www.st.com/en/microcontrollers-microprocessors/stm32f103c8.html)
@@ -6,7 +6,9 @@
 [![Heap](https://img.shields.io/badge/Dynamic%20Heap-0%20Bytes%20(Deterministic)-orange.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-purple.svg)](LICENSE)
 
-Hệ thống firmware xe tự hành tránh vật cản công nghiệp/nhúng độ tin cậy cao (**Automotive/Production Grade Embedded Firmware**) triển khai trên vi điều khiển **STM32F103C8T6 (ARM Cortex-M3 @ 72 MHz)**. 
+Firmware thử nghiệm xe tránh vật cản trên **STM32F103C8T6 (ARM Cortex-M3 @ 72 MHz)**, do Nhân và Hưng phát triển trong ba tháng. Code và kiểm thử trên máy đã có; phần cứng, thời gian dừng và độ chính xác góc quay vẫn cần đo trên xe.
+
+Xem [trạng thái hiện tại và việc tiếp theo](About/CURRENT_STATUS.md) trước khi đấu nối hoặc nạp firmware.
 
 Toàn bộ hệ thống được xây dựng trên nền tảng **FreeRTOS v11 với 100% cấp phát tĩnh (Static Memory Allocation - 0 byte heap)**, kiến trúc điều khiển kín (**Closed-loop Control**) tích hợp cảm biến góc nghiêng/quán tính 6 trục **IMU MPU6050** qua I2C1 và cảm biến siêu âm **HC-SR04** qua **Timer Input Capture** chính xác mức microsecond.
 
@@ -14,12 +16,12 @@ Toàn bộ hệ thống được xây dựng trên nền tảng **FreeRTOS v11 v
 
 ## 1. Tổng quan Kiến trúc Hệ thống
 
-Hệ thống được thiết kế theo mô hình phân tầng chặt chẽ (**Layered Architecture: MCAL $\to$ Devices $\to$ App $\to$ Core**), tuân thủ các quy chuẩn khắt khe của hệ thống thời gian thực quan trọng (Safety-Critical Embedded Systems):
+Hệ thống phân tầng **MCAL $\to$ Devices $\to$ App $\to$ Core**; các ngưỡng và mức an toàn dưới đây vẫn là giả định cần kiểm chứng trên phần cứng:
 - **Cơ chế cấp phát bộ nhớ tất định (Deterministic Allocation)**: Loại bỏ hoàn toàn heap (`pvPortMalloc`, `malloc`, `free`), loại trừ 100% nguy cơ phân mảnh bộ nhớ (Memory Fragmentation) và rò rỉ bộ nhớ (Memory Leak).
-- **Không dùng hàm chặn (Zero Blocking Calls)**: Cấm tuyệt đối `HAL_Delay()` và các vòng lặp chờ bận (busy-wait). Mọi định thời đều dùng `vTaskDelayUntil()` và Hardware Timers.
+- **Đường điều khiển không chờ hàng trăm mili giây**: Task dùng `xTaskDelayUntil()`. I2C và UART hiện vẫn polling có timeout; xung trigger 10 µs và phục hồi I2C có vòng chờ ngắn. `tSafety` có ưu tiên cao hơn các task này.
 - **Không dùng newlib formatted I/O**: Tuyệt đối không dùng `printf`, `sprintf` để tránh phình Flash và nghẽn CPU. Sử dụng bộ định dạng số nguyên siêu nhẹ tùy biến trên USART1.
 - **Cơ chế khôi phục I2C Bus Hardware Recovery**: Tự động giải phóng bus SDA bị treo bằng chuỗi xung 9 clock + STOP condition trước khi khởi tạo ngoại vi.
-- **Khởi động mềm động cơ (PWM Slew-Rate Limiter)**: Bộ lọc dốc giới hạn gia tốc xung PWM trên TIM3 nhằm triệt tiêu hiện tượng sụt áp nguồn (**Brown-out**) và hiện tượng trượt bánh xe (**Wheel Slip**).
+- **Khởi động mềm động cơ**: TIM3 giới hạn mức tăng duty theo cấu hình; tác động lên dòng motor, sụt nguồn và độ bám bánh cần đo thực tế.
 - **Giám sát an toàn đa tầng (Multi-layer Safety Monitor)**: Tích hợp bảo vệ góc nghiêng quá ngưỡng (Tilt Fault > 30°), kiểm soát khoảng cách an toàn, kiểm tra tính tươi của dữ liệu cảm biến (Sensor Staleness < 200 ms) và Hardware Watchdog (IWDG) giám sát sống còn (Liveness Heartbeat) của các RTOS Tasks.
 
 ---
@@ -37,17 +39,17 @@ flowchart TD
     end
 
     subgraph RTOS_TASKS["5 FreeRTOS Tasks (100% Static Allocation)"]
-        tSensor["tSensor (Priority 2, T=10ms)<br/>- Đọc HC-SR04 + Bộ lọc Trung vị Median (5 mẫu)<br/>- Đọc 6-DOF MPU6050 + Deadband Filter"]
+        tSensor["tSensor (Priority 2, T=10ms)<br/>- Đọc HC-SR04, chưa có median<br/>- Đọc MPU6050 và hiệu chuẩn từng mẫu"]
         tSafety["tSafety (Priority 4 - Cao nhất, T=10ms)<br/>- Chống dội nút bấm (Debounce 25ms)<br/>- Giám sát góc nghiêng lật Tilt > 30°<br/>- Giám sát Liveness Task Heartbeat<br/>- Refresh Hardware IWDG"]
         tDecision["tDecision (Priority 1, T=20ms)<br/>- Máy trạng thái hữu hạn FSM<br/>- Tích phân góc xoay Yaw Closed-loop 90°<br/>- Điều khiển TB6612 Slew-rate PWM<br/>- Cập nhật LED & Còi báo"]
-        tLog["tLog / Telemetry (Priority 0, T=100ms)<br/>- Đóng gói Telemetry không chặn<br/>- Truyền qua USART1 TX @ 115200 bps"]
+        tLog["tLog / Telemetry (Priority 0, T=100ms)<br/>- Log mỗi giây hoặc khi safety đổi<br/>- USART1 TX polling có timeout"]
         tBuzzer["tBuzzer (Priority 0, T=100ms)<br/>- Bộ tuần tự mẫu còi (Non-blocking sequencer)"]
     end
 
     subgraph IPC_CHANNELS["Cơ chế Giao tiếp Giữa các Task (IPC)"]
         qRange["qRangeMailbox<br/>(Static Queue length=1, overwrite)"]
         qImu["qImuMailbox<br/>(Static Queue length=1, overwrite)"]
-        egSafety["egSafety (EventGroup)<br/>- MANUAL_INHIBIT<br/>- TILT_FAULT<br/>- TIMEOUT_FAULT"]
+        egSafety["egSafety (EventGroup)<br/>- STOP<br/>- SENSOR_FAULT<br/>- TILT_FAULT<br/>- TASK_FAULT"]
         egAlive["egAlive (EventGroup)<br/>- ALIVE_BIT_SENSOR<br/>- ALIVE_BIT_DECISION"]
     end
 
@@ -62,7 +64,7 @@ flowchart TD
     %% Flow connections
     TIM2_ISR -->|Raw pulse duration| tSensor
     I2C_DRV -->|Raw Accel/Gyro| tSensor
-    GPIO_DRV -->|Edge/Level| tSafety
+    GPIO_DRV -->|GPIO polling/debounce| tSafety
 
     tSensor -->|Ghi khoảng cách đã lọc| qRange
     tSensor -->|Ghi mẫu IMU 6 trục| qImu
@@ -75,6 +77,7 @@ flowchart TD
 
     tSafety -->|Quét & Reset liveness| egAlive
     tSafety -->|Cập nhật cờ lỗi/cho phép| egSafety
+    tSafety -->|Hạ STBY khi inhibit| TB6612
     tSafety -->|Refresh định kỳ 100ms| IWDG_HW
 
     tDecision -->|Lệnh tốc độ & chiều| TB6612
@@ -180,7 +183,7 @@ stateDiagram-v2
 | **`PA8`** | `GPIO_Input_PullUp` (EXTI8) | **User Button** | Nút bấm chuyển chế độ / Rearm hệ thống sau lỗi (Active Low) |
 | **`PC13`** | `GPIO_Output_OD` | **Status LED** | LED báo trạng thái onboard trên Blue Pill (Active Low) |
 | **`PB12`** | `GPIO_Output_PP` | **Active Buzzer** | Còi báo động qua tầng đệm transistor NPN |
-| **`PA9`** | `USART1_TX` (Alternate Function PP) | **Telemetry / Serial** | Truyền dữ liệu trạng thái xe không chặn @ 115200 bps, 8N1 |
+| **`PA9`** | `USART1_TX` (Alternate Function PP) | **Telemetry / Serial** | Polling có timeout @ 115200 bps, 8N1 |
 | **`PA10`** | `USART1_RX` (Input Floating) | **Telemetry / Serial** | Dự phòng nhận lệnh cấu hình |
 | **`PA13`** | `SYS_JTMS-SWDIO` | **ST-Link v2** | Giao tiếp nạp chương trình và Debug SWD |
 | **`PA14`** | `SYS_JTCK-SWCLK` | **ST-Link v2** | Xung nhịp Debug SWD |
@@ -189,20 +192,7 @@ stateDiagram-v2
 
 ## 5. Báo cáo Phân bổ Bộ nhớ (Memory Footprint)
 
-Số liệu đo đạc thực tế từ bản biên dịch tối ưu hóa Release (`-Os`) bằng `arm-none-eabi-size`:
-
-```text
-   text    data     bss     dec     hex filename
-  23740      32    8928   32700    7fbc Firmware/build/release/obstacle_car.elf
-```
-
-### Bảng Chỉ số Sử dụng Tài nguyên Vi điều khiển:
-
-| Phân vùng Bộ nhớ | Dung lượng Sử dụng | Tổng Dung lượng Phần cứng | Tỷ lệ Phần trăm | Đánh giá Trạng thái |
-| :--- | :---: | :---: | :---: | :--- |
-| **Flash (ROM)** | **23,772 Bytes** (`text` + `data`) | 65,536 Bytes (64 KiB) | **36.27%** | Tiết kiệm ~64% bộ nhớ cho tính năng mở rộng |
-| **SRAM (RAM)** | **8,960 Bytes** (`data` + `bss`) | 20,480 Bytes (20 KiB) | **43.75%** | Biên độ an toàn cao (> 11.5 KiB còn trống) |
-| **Heap (Dynamic)**| **0 Bytes** | Cấm sử dụng | **0.00%** | **100% Cấp phát Tĩnh - Chuẩn MISRA/Safety** |
+Chạy `cmake --build --preset release` rồi `arm-none-eabi-size -B build/release/obstacle_car.elf` trong `Firmware/` để lấy số hiện tại. CI cũng in footprint sau mỗi build. Số RAM của linker **không** thay thế phép đo stack còn lại khi chạy trên board. FreeRTOS dùng cấp phát tĩnh; đây không phải chứng nhận tuân thủ MISRA.
 
 ### Chi tiết Phân bổ Ngân sách RAM Tĩnh:
 - **Application Task Stacks (5 tasks)**: $5 \times 256 \times 4\text{ bytes} = 5,120\text{ bytes}$.
@@ -215,17 +205,17 @@ Số liệu đo đạc thực tế từ bản biên dịch tối ưu hóa Releas
 
 ## 6. Cơ chế An toàn & Độ tin cậy (Safety & Fault Tolerance)
 
-Hệ thống được thiết kế theo tiêu chuẩn an toàn lỗi (**Fail-Safe Design**):
+Các lớp bảo vệ đã có trong code, cần đo thời gian phản ứng trên board:
 1. **Bảo vệ Lật xe (Tilt Fault Protection)**:
    Góc nghiêng được đo liên tục từ gia tốc kế MPU6050. Thay vì tính hàm lượng giác tốn kém `acos/asin`, hệ thống sử dụng so sánh bình phương vô hướng:
    $$\cos^2(\theta) = \frac{a_z^2}{a_x^2 + a_y^2 + a_z^2} < \cos^2(30^\circ) = \frac{3}{4}$$
    Nếu xe bị nghiêng hoặc lật quá $30^\circ$, động cơ lập tức bị ngắt cưỡng bức và FSM chuyển sang trạng thái an toàn.
 2. **Khởi động Mềm (Slew-Rate Ramp Limiter)**:
-   Tốc độ biến thiên Duty Cycle của PWM được giới hạn tối đa `3% / ms`. Khi xe đổi hướng đột ngột (Tiến $\leftrightarrow$ Lùi), driver sẽ chèn một khoảng phanh ngắn `MOTOR_DIRECTION_BRAKE_MS = 60 ms` để bảo vệ tiếp giáp H-bridge và chống sốc cơ học cho hộp số.
+   Mức tăng Duty Cycle của PWM được giới hạn ở `3‰ / ms` (0,3%/ms). Khi đảo chiều, driver chèn khoảng phanh `MOTOR_DIRECTION_BRAKE_MS = 60 ms`; cả hai con số cần kiểm tra với motor và cầu H thật.
 3. **Phòng vệ Kẹt Bus I2C (Bus Recovery)**:
-   Nếu bus I2C bị xung đột hoặc chip Slave kéo kẹt đường SDA ở mức LOW, hàm `i2c_recover_bus()` sẽ chuyển GPIO sang Open-Drain, phát liên tiếp 9 xung nhịp trên SCL để nhả thanh ghi dịch Slave và phát chuỗi STOP condition hợp lệ trước khi bàn giao lại cho module phần cứng I2C.
+   Nếu bus I2C bị kẹt SDA LOW, `i2c.c` thử phát tối đa 9 xung SCL và STOP trước khi khởi tạo lại ngoại vi.
 4. **Hardware Watchdog Đa Luồng (Task Heartbeat IWDG)**:
-   IWDG của STM32F103 được cấu hình ở chu kỳ $500\text{ ms}$. Chỉ khi cả hai task chính (`tSensor` và `tDecision`) gửi tín hiệu sống (Check-in Bit) về cho `tSafety` trong cửa sổ $100\text{ ms}$, watchdog mới được nạp lại. Nếu bất kỳ task nào gặp sự cố treo luồng, MCU sẽ tự động Reset trong vòng $333\text{ ms}$.
+   IWDG có timeout danh nghĩa 500 ms, biến thiên theo LSI. `tSafety` kiểm tra heartbeat của `tSensor` và `tDecision` mỗi 100 ms; nếu thiếu task, hạ STBY ngay, chốt `TASK_FAULT` và ngừng refresh watchdog. Chỉ nút rearm khi heartbeat và cảm biến tốt mới xoá lỗi. Chưa có số đo thời gian cắt thực trên board.
 
 ---
 
@@ -243,6 +233,14 @@ Chạy script kiểm tra để đảm bảo 100% không vi phạm quy tắc cấ
 # Chạy từ thư mục gốc của repository
 bash tools/check_constraints.sh
 ```
+
+### Kiểm thử hành vi trên máy
+
+```bash
+bash Firmware/tools/test_host.sh
+```
+
+Script dùng C compiler của máy để chạy kiểm thử safety, hiệu chuẩn IMU, buzzer và log số âm; không thay thế kiểm thử trên STM32.
 
 ### 2. Biên dịch Firmware bằng CMake Presets
 
@@ -299,10 +297,10 @@ STM32-Obstacle-Avoidance-Car/
     ├── Config/                  # Cấu hình chân phần cứng và tham số toàn hệ thống
     │   ├── app_config.h         # Ngân sách RAM, chu kỳ task, tham số FSM
     │   ├── board_config.h       # Ánh xạ GPIO, Timer, I2C, UART
-    │   └── FreeRTOSConfig.h     # Cấu hình FreeRTOS tĩnh (0 dynamic heap)
+    │   └── project_types.h      # Kiểu status/mẫu cảm biến
     ├── Core/                    # Điểm khởi tạo hệ thống, clock 72MHz, RTOS scheduler
     │   ├── Src/main.c           # Khởi tạo 5 Task tĩnh và điều phối hệ thống
-    │   └── Inc/main.h
+    │   └── Inc/FreeRTOSConfig.h # Cấu hình FreeRTOS tĩnh
     ├── Drivers/
     │   ├── MCAL/                # Lớp trừu tượng hóa vi điều khiển (GPIO, PWM, I2C, Timebase, UART)
     │   └── Devices/             # Driver thiết bị (TB6612, MPU6050, HC-SR04, Buzzer, Button, LED)
@@ -310,7 +308,8 @@ STM32-Obstacle-Avoidance-Car/
     │   ├── Src/robot_car.c      # Bộ điều phối trung tâm App
     │   ├── Src/obstacle_avoidance.c # Máy trạng thái FSM né vật cản & tích phân góc kín
     │   ├── Src/safety_monitor.c # Giám sát an toàn lật xe & liveness watchdog
-    │   └── Src/sensor_manager.c # Pipeline lọc dữ liệu cảm biến siêu âm & IMU
+    │   └── Src/sensor_manager.c # Lấy mẫu siêu âm và IMU qua mailbox
+    ├── Tests/Host/             # Kiểm thử hành vi với mock trên máy
     └── ThirdParty/              # Thư viện CMSIS, STM32F1xx HAL, FreeRTOS-Kernel v11
 ```
 

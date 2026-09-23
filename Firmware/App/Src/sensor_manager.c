@@ -39,9 +39,7 @@ status_t sensor_manager_init(void)
      * vi mot soi day long. safety_monitor da chot SAFETY_BIT_SENSOR_FAULT tu
      * luc boot nen xe van khong the chay, va sensor_manager_update() se thu
      * khoi tao lai theo chu ky. */
-    if (mpu6050_init(&imu_sensor) == STATUS_OK) {
-        (void)mpu6050_calibrate_gyro();
-    }
+    (void)mpu6050_init(&imu_sensor);
     imu_sampled_ms = 0U;
     imu_reinit_ms = 0U;
     if (qRangeMailbox == NULL) {
@@ -71,6 +69,12 @@ static void update_imu(uint32_t now_ms)
     if ((uint32_t)(now_ms - imu_sampled_ms) < SENSOR_IMU_PERIOD_MS) { return; }
     imu_sampled_ms = now_ms;
 
+    /* Khong cho mailbox nhan SAMPLE_OK truoc khi 64 mau gyro moi duoc hieu
+     * chuan. Moi vong chi doc toi da mot mau; tSafety tiep tuc chay binh thuong. */
+    if (mpu6050_is_initialized() && !mpu6050_is_calibrated()) {
+        (void)mpu6050_calibrate_gyro();
+        return;
+    }
     result = mpu6050_read(&imu);
     if (result == STATUS_OK) {
         /* Publish ca mau hop le lan ma loi: consumer phai thay bang chung cua

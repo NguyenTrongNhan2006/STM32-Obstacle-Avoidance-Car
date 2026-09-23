@@ -56,12 +56,12 @@
 #define DEBUG_TX_PIN GPIO_PIN_9
 #define DEBUG_RX_PIN GPIO_PIN_10
 #define DEBUG_BAUD 115200UL
-/* Owners: pwm -> TIM3; timebase -> TIM2 capture (future, no init yet);
+/* Owners: pwm -> TIM3; timebase -> TIM2 capture;
  * i2c -> I2C1; uart_debug -> USART1; exti -> EXTI8; TIM4 spare.
  * SysTick -> kernel + HAL tick wrapper. No timer/bus may have two owners.
  * [CO DINH] CMSIS priorities: smaller number is more urgent.
  * ISR using RTOS FromISR APIs must use a number >= 5 (and <= 15).
- * These assignments do not enable any peripheral interrupt in the skeleton.
+ * TIM2 va EXTI8 da duoc bat NVIC trong module so huu; I2C van polling.
  */
 #define IRQ_PRIO_ECHO 5U
 #define IRQ_PRIO_BUTTON 5U

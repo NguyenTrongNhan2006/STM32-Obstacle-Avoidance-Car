@@ -8,4 +8,5 @@ status_t uart_debug_read(uint8_t *data, size_t capacity, uint32_t timeout_ms);
 /* Single writer tLog (or pre-scheduler boot); task context only, no shared formatter. */
 status_t uart_log(const char *message);
 status_t uart_log_u32(const char *label, uint32_t value);
+status_t uart_log_i32(const char *label, int32_t value);
 #endif

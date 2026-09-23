@@ -96,3 +96,20 @@ status_t uart_log_u32(const char *label, uint32_t value)
     output[count++] = '\n';
     return uart_debug_write((const uint8_t *)output, count, log_timeout_ms);
 }
+status_t uart_log_i32(const char *label, int32_t value)
+{
+    char digits[10];
+    char output[13];
+    size_t count = 0U;
+    size_t index = 0U;
+    uint32_t magnitude = (value < 0) ? (uint32_t)(-(int64_t)value) : (uint32_t)value;
+    status_t result = uart_log(label);
+    if (result != STATUS_OK) { return result; }
+    if (value < 0) { output[index++] = '-'; }
+    do { digits[count++] = (char)('0' + magnitude % 10U); magnitude /= 10U; }
+    while (magnitude != 0U);
+    while (count > 0U) { output[index++] = digits[--count]; }
+    output[index++] = '\r';
+    output[index++] = '\n';
+    return uart_debug_write((const uint8_t *)output, index, log_timeout_ms);
+}

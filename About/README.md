@@ -2,13 +2,14 @@
 
 **Nhân + Hưng · 20/09–20/12/2026 · FreeRTOS trên STM32F103C8T6.**
 
-Đây là nền để hai người tự viết firmware. Build thành công chỉ xác nhận cú pháp, liên kết và bộ nhớ tĩnh; chưa xác nhận xe chạy, thời gian đáp ứng hay đấu nối.
+Firmware đã có đường cảm biến, điều khiển và safety trong code. Build và host tests xác nhận một phần hành vi; chưa xác nhận xe chạy, thời gian đáp ứng hay đấu nối.
 
 | Đọc theo thứ tự | Nội dung |
 | --- | --- |
+| [Trạng thái hiện tại](CURRENT_STATUS.md) | Việc đã có code, giới hạn kiểm thử và việc gần nhất của Nhân/Hưng |
 | [Đánh giá ý tưởng](DESIGN_REVIEW.md) | Vì sao áp dụng skeleton có API; các lỗi kỹ thuật đã sửa |
 | [Kế hoạch và phần cứng](PROJECT_PLAN.md) | Phạm vi 3 tháng, BOM, pinout, tính năng mở rộng có điều kiện |
-| [Vai trò từng file](FIRMWARE_GUIDE.md) | Danh sách file, trạng thái thực tế, API và người phụ trách |
+| [Vai trò từng file](FIRMWARE_GUIDE.md) | Hợp đồng API và ownership từ giai đoạn skeleton; xem trạng thái mới trước |
 | [Hồ sơ sơ đồ hệ thống](SYSTEM_DIAGRAMS.md) | Mẫu chèn Schematic, FSM từng khối, Flowchart và phần giải thích |
 | [Hướng dẫn triển khai](IMPLEMENTATION_GUIDE.md) | Cài công cụ, build, debug, từng mốc phát triển và cách phối hợp |
 | [Timeline Nhân–Hưng](TEAM_TIMELINE.md) | Công việc mỗi tuần, cân bằng tải, mốc tích hợp và deadline |

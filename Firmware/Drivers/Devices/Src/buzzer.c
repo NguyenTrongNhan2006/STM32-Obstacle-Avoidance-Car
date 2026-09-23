@@ -49,6 +49,9 @@ static bool initialized;
  * buzzer_update(). Mot writer, mot reader, kieu enum vua mot word nen ghi/doc
  * nguyen tu tren Cortex-M3 — khong can mailbox hay khoa cho mot bien quan sat. */
 static volatile buzzer_pattern_t requested = BUZZER_SILENT;
+/* CAR_STOP co the chi keo dai 20 ms, ngan hon chu ky tBuzzer 100 ms.
+ * Giu mot su kien cho den khi task chu so huu GPIO bat dau mau canh bao. */
+static volatile bool obstacle_pending;
 static buzzer_pattern_t active = BUZZER_SILENT;
 static uint32_t step_index;
 static uint32_t step_started_ms;
@@ -81,6 +84,7 @@ status_t buzzer_init(const buzzer_config_t *config)
     initialized = false;
     drive_active_high = config->active_high;
     requested = BUZZER_SILENT;
+    obstacle_pending = false;
     active = BUZZER_SILENT;
     step_index = 0U;
     step_started_ms = 0U;
@@ -96,6 +100,12 @@ status_t buzzer_set(buzzer_pattern_t pattern)
     if (!initialized) { return STATUS_NOT_READY; }
     /* Chi ghi y dinh. Viec doi mau thuc su xay ra trong buzzer_update(), tren
      * task so huu chan — nguoi goi khong bao gio cham vao GPIO tu day. */
+    if (pattern == BUZZER_OBSTACLE && requested != BUZZER_OBSTACLE) {
+        obstacle_pending = true;
+    }
+    if (pattern == BUZZER_FAULT || pattern == BUZZER_SILENT) {
+        obstacle_pending = false;
+    }
     requested = pattern;
     return STATUS_OK;
 }
@@ -111,8 +121,14 @@ status_t buzzer_update(uint32_t now_ms)
 
     if (!initialized) { return STATUS_NOT_READY; }
 
-    if (requested != active) {
-        active = requested;
+    /* FAULT va SILENT luon uu tien. Mau OBSTACLE da bat dau phai phat het mot
+     * lan, ke ca FSM chuyen sang TURN truoc khi tBuzzer duoc lap lich. */
+    if (((requested == BUZZER_FAULT || requested == BUZZER_SILENT) &&
+         requested != active) ||
+        (active != BUZZER_OBSTACLE &&
+         (obstacle_pending || requested != active))) {
+        active = obstacle_pending ? BUZZER_OBSTACLE : requested;
+        obstacle_pending = false;
         step_index = 0U;
         step_started_ms = now_ms;
         steps = steps_of(active, &count);
@@ -126,6 +142,17 @@ status_t buzzer_update(uint32_t now_ms)
         return STATUS_OK;
     }
     if ((uint32_t)(now_ms - step_started_ms) < steps[step_index].duration_ms) {
+        return STATUS_OK;
+    }
+
+    if (active == BUZZER_OBSTACLE && step_index + 1U == count) {
+        /* Canh bao da phat het. Ve mau hien tai cua FSM o nhip ke tiep. */
+        active = obstacle_pending ? BUZZER_OBSTACLE : requested;
+        obstacle_pending = false;
+        step_index = 0U;
+        step_started_ms = now_ms;
+        steps = steps_of(active, &count);
+        drive((count > 0U) && steps[0].on);
         return STATUS_OK;
     }
 
