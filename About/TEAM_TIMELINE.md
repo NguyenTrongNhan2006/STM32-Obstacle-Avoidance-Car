@@ -1,5 +1,7 @@
 # Timeline Nhân và Hưng — 3 tháng
 
+> Kế hoạch tuần bên dưới giữ nguyên mốc; [trạng thái hiện tại](CURRENT_STATUS.md) ghi các mục đã có code và phép đo còn thiếu. Code làm sớm không tự động hoàn thành cổng tích hợp của tuần đó.
+
 **Kế hoạch: 20/09/2026 đến 20/12/2026.** Gồm 12 tuần phát triển đến 12/12, sau đó 8 ngày dự phòng/bàn giao. Ngày bắt đầu được lấy theo lần cập nhật này; nếu lịch thực tế khác, đổi cả bảng và deadline cùng nhau.
 
 Giả định lập kế hoạch: **8–10 giờ/người/tuần**, cả hai cùng mức cam kết; đây chưa phải số giờ hai bạn đã xác nhận. Khoảng 60% thời gian làm phần mình, 20% review/test phần bạn, 20% tích hợp và tài liệu. Cân bằng bằng thời gian và độ khó, không đếm số file hay dòng code.

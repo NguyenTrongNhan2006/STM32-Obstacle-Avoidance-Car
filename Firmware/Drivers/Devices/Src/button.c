@@ -3,9 +3,9 @@
 #include "gpio.h"
 #include "timebase.h"
 
-/* Polled debounce only. EXTI is not routed yet (every peripheral IRQ still
- * traps), so the event-capture half of this driver arrives with the NVIC
- * bring-up and must not be assumed present.
+/* Button ownership remains polling/debounce. EXTI8 is routed, but its pending
+ * edge is not consumed by safety_monitor; short presses between polls are not
+ * guaranteed to be observed.
  */
 #define BUTTON_ACTIVE_HIGH ((bool)(BUTTON_ACTIVE_LEVEL == GPIO_PIN_SET))
 

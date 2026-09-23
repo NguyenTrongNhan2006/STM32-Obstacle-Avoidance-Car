@@ -13,13 +13,13 @@
 #define TASK_DECISION_PRIORITY 1U
 #define TASK_LOG_PRIORITY 0U
 #define TASK_BUZZER_PRIORITY 0U
-/* Skeleton sleep only; these are NOT the eventual safety/control deadlines. */
-#define TASK_SAFETY_PERIOD_MS 100U
-#define TASK_SENSOR_PERIOD_MS 100U
-#define TASK_DECISION_PERIOD_MS 100U
+/* Chu ky task hien dung. Gia tri can doi chieu voi do do tren board. */
+#define TASK_SAFETY_PERIOD_MS 10U
+#define TASK_SENSOR_PERIOD_MS 10U
+#define TASK_DECISION_PERIOD_MS 20U
 #define TASK_LOG_PERIOD_MS 100U
 #define TASK_BUZZER_PERIOD_MS 100U
-/* [DO] Targets after implementation: validate against response-time measurements. */
+/* [DO] Chu ky dieu khien dang dung; phai do response time tren board. */
 #define SENSOR_RANGE_PERIOD_MS 60U
 #define SENSOR_IMU_PERIOD_MS 10U
 #define SAFETY_TARGET_PERIOD_MS 10U
@@ -71,7 +71,7 @@
  * idle + timer stacks: 2*128*sizeof(StackType_t) = 1024
  * task control blocks: 7*sizeof(StaticTask_t)
  * sensor mailboxes: 2*sizeof(StaticQueue_t)+sizeof(sample_t)+sizeof(imu_sample_t)
- * safety event group: sizeof(StaticEventGroup_t)
+ * safety + alive event groups: 2*sizeof(StaticEventGroup_t)
  * reserve 4096 for kernel globals/timer queue/HAL/data/alignment;
  * reserve 1024 for linker MSP/interrupt stack; final map must fit 20480.
  * Reserve is a planning allowance, not a substitute for map/stack measurement.

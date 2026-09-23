@@ -94,12 +94,8 @@ void SystemClock_Config(void)
 /* Ca nam task dung xTaskDelayUntil chu khong phai vTaskDelay: chu ky duoc tinh
  * tu lan danh thuc truoc, nen khong troi theo thoi gian xu ly cua than vong lap.
  *
- * Chu ky lay tu nhom *_TARGET_/SENSOR_* trong app_config.h, khong phai nhom
- * TASK_*_PERIOD_MS (nhom do la sleep tam cua skeleton). Cac hang so nay van la
- * [DO] - phai do lai response time truoc khi coi la da chot.
- *
- * Moi ham duoc goi o day deu con tra STATUS_NOT_READY o mot phan duong di.
- * Do la trang thai dung: lop App da co logic, con driver thi chua.
+ * Chu ky duoc cau hinh trong app_config.h. Cac hang so nay van la [DO] - phai
+ * do lai response time tren board truoc khi coi la da chot.
  */
 static void task_safety(void *argument)
 {
@@ -173,7 +169,7 @@ static void task_log(void *argument)
                 }
                 (void)uart_log_u32("imu_st=", (uint32_t)imu.status);
                 if (imu.status == SAMPLE_OK) {
-                    (void)uart_log_u32("yaw_dps=", (uint32_t)(int32_t)mpu6050_yaw_rate_dps(&imu));
+                    (void)uart_log_i32("yaw_dps=", (int32_t)mpu6050_yaw_rate_dps(&imu));
                     (void)uart_log_u32("tilt_fault=", (uint32_t)mpu6050_tilt_exceeded(&imu));
                 }
             }

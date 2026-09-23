@@ -2,7 +2,7 @@
 
 Dự án STM32F103C8T6 + FreeRTOS của Nhân và Hưng, deadline 20/12/2026. Đọc [About/README.md](About/README.md), [FIRMWARE_GUIDE](About/FIRMWARE_GUIDE.md) và [timeline](About/TEAM_TIMELINE.md) trước khi phát triển.
 
-Trạng thái hiện tại là skeleton build được: boot/clock/RTOS static, GPIO an toàn, UART cơ bản và mailbox/event group có mã nền. Thuật toán/driver cảm biến/PWM chưa triển khai. Không coi mọi file là rỗng, cũng không coi xe đã chạy.
+Trạng thái hiện tại: đã có đường sensor, motor, FSM, safety và 5 Task build được; host tests kiểm tra một phần hành vi. Chưa xác nhận xe chạy hoặc thời gian đáp ứng trên board. Xem `About/CURRENT_STATUS.md` trước khi thay đổi code hoặc tài liệu.
 
 ## Ràng buộc
 
@@ -16,10 +16,10 @@ Trạng thái hiện tại là skeleton build được: boot/clock/RTOS static, 
 - Mỗi timer/bus có một owner. Nhân giữ Core/config/CMake; Hưng giữ sensor/I2C/UART/buzzer. Shared API thay đổi qua review chung.
 - Không có IR trái/phải, Zephyr hoặc điều khiển từ xa trong scope ba tháng.
 - [DO] là giả định cần đo; [CO DINH] là ràng buộc đã có nguồn. Không đổi giả định thành số đo trong tài liệu.
-- Giữ TODO/IMPLEMENT cho phần chưa được yêu cầu triển khai; stub trả NOT_READY, không báo OK giả cho phép đo/actuation.
+- Giữ TODO cho việc chưa được đo hoặc chưa chốt; không báo OK giả cho phép đo/actuation. TB6612 hiện đã có code nhưng linh kiện chưa được tác giả chốt.
 
 ## Build và review
 
-Trong Firmware: configure/build cả preset debug/release, chạy tools/check_constraints.sh với ELF tồn tại, xem size/map và warning của source dự án. Chi tiết ở About/IMPLEMENTATION_GUIDE.md. Khi thêm driver HAL I2C/TIM thật, cập nhật HAL config/source trong thay đổi có chủ đích; bản skeleton hiện giữ nguyên vendor/toolchain/linker/preset.
+Trong Firmware: build cả preset debug/release, chạy `tools/check_constraints.sh` với ELF và `tools/test_host.sh`, xem size/map và warning source dự án. HAL I2C/TIM/IWDG đã bật. Thêm kết quả kiểm thử phần cứng và cập nhật `About/CURRENT_STATUS.md` khi chốt một mốc.
 
 Yêu cầu của tác giả cho lần áp dụng skeleton đã cho phép tạo API/plumbing và thêm source vào CMake. Những công việc sau đó làm theo yêu cầu hiện hành, không suy ra cần xin lại quyền cho thao tác đã được giao. Thay đổi hành vi phải có kiểm thử phù hợp và cập nhật About cùng config.

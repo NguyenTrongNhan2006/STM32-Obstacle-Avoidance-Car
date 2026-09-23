@@ -1,5 +1,7 @@
 # Trạng thái hiện thực hóa — checklist
 
+> **Lưu ý 23/09/2026:** Checklist dài bên dưới ghi lại các bước triển khai trước đây; một số đoạn mô tả stub, motor và hiệu chuẩn đã cũ. Dùng [CURRENT_STATUS.md](CURRENT_STATUS.md) để xem trạng thái hiện tại và cổng kiểm thử còn thiếu.
+
 [Về mục lục](README.md) · [Vai trò firmware](FIRMWARE_GUIDE.md) · [Hướng dẫn triển khai](IMPLEMENTATION_GUIDE.md) · [Kiểm thử](TEST_PLAN.md) · [Sơ đồ Mermaid](../docs/diagrams/)
 
 **Nguồn:** quét toàn bộ `Firmware/` (trừ `ThirdParty/`) tìm `STATUS_NOT_READY`, `IMPLEMENT`, `TO DO`.
@@ -308,21 +310,22 @@ task_sensor 16 + sensor_manager_update 24 + update_imu 40 + mpu6050_read 40
 1. **Trước khi cấp nguồn:** xác nhận MPU6050 chạy ở 3,3 V và có điện trở kéo lên trên
    SDA/SCL. Firmware **không** bật pull-up nội — pull-up yếu của MCU làm sườn tín hiệu
    xấu đi chứ không tốt lên.
-2. Cắm IMU → `imu_st=0` (`SAMPLE_OK`) trong log; `safety=` giảm từ `3` xuống `1`
-   (chỉ còn `SAFETY_BIT_STOP`).
-3. Nhấn nút khi cả hai cảm biến hợp lệ → `safety=0`, `safety_is_clear_to_run()` lần đầu
-   trả `true`. **Xe vẫn không chạy** vì `motor_apply()` còn `NOT_READY` (bước 4).
+2. Cắm IMU và giữ xe đứng yên → sau 64 mẫu mới, `imu_st=0` (`SAMPLE_OK`).
+   `SAFETY_BIT_SENSOR_FAULT` vẫn giữ đến khi nhấn rearm.
+3. Nhấn nút khi cả hai cảm biến hợp lệ và heartbeat đủ → `safety=0`,
+   `safety_is_clear_to_run()` trả `true`. **Motor có thể chạy** vì `motor_apply()`
+   đã điều khiển TB6612 thật; chỉ thử trên giá đỡ sau khi chốt cầu H.
 4. **Nghiêng xe > 30°** → `safety=4` (`SAFETY_BIT_TILT_FAULT`). Đặt lại phẳng rồi nhấn
    nút → xoá được.
-5. **Rút dây SDA hoặc SCL** → `imu_st=1` hoặc `2`, `safety=2` (`SENSOR_FAULT`) trong
-   vòng ~200 ms. Cắm lại → tự phục hồi trong ≤ 500 ms, **không cần reset**.
+5. **Rút dây SDA hoặc SCL** → IMU lỗi hoặc mẫu cũ hết hạn, `SENSOR_FAULT` latch.
+   Cắm lại → thử init mỗi 500 ms, sau đó cần khoảng 0,64 s hiệu chuẩn và nhấn
+   rearm. Chưa có thời gian phục hồi đo trên board.
 6. **Nối tắt SDA xuống GND rồi reset MCU** → stuck-bus recovery phải gỡ được bus; nếu
    không, `i2c_init()` vẫn trả OK nhưng mọi giao dịch sẽ `STATUS_TIMEOUT`.
 7. In raw 3 trục accel để **xác nhận `accel_raw[2]` là trục thẳng đứng và dương khi xe
    nằm phẳng** — giả định `[DO]` của `imu_upright()` phụ thuộc hoàn toàn vào hướng lắp.
 
-> ⚠️ `mpu6050_calibrate()` **chưa được gọi ở đâu**. Nó phải được gọi có chủ đích khi đã
-> biết chắc xe đứng yên, không phải tự động lúc khởi động.
+> `sensor_manager` hiện gọi hiệu chuẩn từng mẫu khi boot và sau khi kết nối lại. `SAMPLE_OK` chỉ được publish khi đủ 64 mẫu data-ready hợp lệ. Cần xác nhận xe đứng yên và đo bias trên cảm biến thật.
 
 ### Bước 4 — Actuation ✅ CODE XONG, CHƯA CHẠY MOTOR THẬT
 
@@ -421,9 +424,10 @@ task_decision 16 + robot_car_update 72 + motor_apply 32 + drive 88
 5. `motor_st=` trong log: `3` (`NOT_READY`) khi safety chưa clear, `0` (`OK`) khi đã clear.
 6. **Thử từng bánh:** tạm đặt `TURN_SPEED_PERCENT = 0` để tách một bánh, xác nhận chiều
    quay khớp mong đợi. Sai thì **đảo dây**, không sửa code.
-7. **Đo thời gian từ lúc nhấn STOP đến khi PWM về 0** — `CLAUDE.md` yêu cầu chứng minh
-   con số này trước khi có motor thật. Dùng oscilloscope 2 kênh: nút bấm và PA6.
-   Kỳ vọng ≤ 1 chu kỳ `tSafety` + 1 chu kỳ `tDecision` = **30 ms**.
+7. **Đo thời gian từ lúc nhấn STOP đến khi STBY xuống thấp**. Dùng oscilloscope
+   2 kênh: nút bấm và PB5. `tSafety` hiện tự hạ STBY khi inhibit; PWM có thể
+   chưa về 0 nếu `tDecision` treo. Đo cả hai tín hiệu, không suy tốc độ dừng từ
+   chu kỳ task khi chưa thử trên board.
 8. **Kiểm tra cửa sổ đảo chiều:** ép FSM đi từ `FORWARD` sang `TURN_LEFT`, xem trên scope
    có đúng `MOTOR_DIRECTION_BRAKE_MS = 60 ms` ở trạng thái IN1=IN2=H trước khi bánh trái
    đảo chiều không.
@@ -477,7 +481,7 @@ flowchart LR
     D["tDecision mỗi 20 ms<br/>sau khi xong một vòng"] -->|"ALIVE_BIT_DECISION"| EG
     EG --> C{"tSafety, mỗi 100 ms:<br/>xEventGroupClearBits trả về<br/>giá trị TRƯỚC khi xoá<br/>== ALIVE_ALL_MASK ?"}
     C -->|"đủ cả hai"| K["watchdog_refresh()"]
-    C -->|"thiếu bit"| N["KHÔNG làm gì<br/>— chính việc không refresh là hành động"]
+    C -->|"thiếu bit"| N["Hạ STBY, latch TASK_FAULT<br/>không refresh"]
     N --> R["IWDG hết giờ → reset MCU"]
 ```
 
@@ -490,9 +494,9 @@ flowchart LR
 | Cửa sổ 100 ms | Lớn hơn chu kỳ task chậm nhất được giám sát (20 ms) **5 lần** ⇒ không reset oan; nhỏ hơn cận dưới IWDG (333 ms) **3,3 lần** ⇒ kịp refresh. |
 | `watchdog_init()` gọi **sau cùng** | Một khi chạy thì không tắt được. Càng ít code chạy trước nó càng ít nguy cơ boot loop. Bỏ qua giai đoạn init **không** mất an toàn: `gpio_init()` đã hạ STBY từ dòng đầu tiên nên treo trong init vẫn để motor ở standby. |
 
-**Độ trễ phát hiện:** task treo → cửa sổ kế tiếp không đủ bit → IWDG hết giờ.
-Tổng từ lúc treo đến lúc reset: **~333…767 ms**. Đây là lưới cuối cùng, không phải
-đường phản ứng chính — đường chính vẫn là `safety_monitor` + `motor_apply()`.
+**Độ trễ phát hiện:** task treo → cửa sổ 100 ms kế tiếp thiếu bit → `tSafety`
+hạ STBY ngay tại lần kiểm tra đó và latch `TASK_FAULT`. IWDG vẫn là lớp reset dự
+phòng; thời gian thực tế cần đo bằng PB5 và reset pin trên board.
 
 #### Trạng thái motor sau khi IWDG reset
 
@@ -532,9 +536,9 @@ watchdog_refresh 8 = 104 B / 1024 B`.
 #### Thử trên board — CHƯA LÀM
 
 1. Khởi động bình thường → `reset_by_wdg=0`, xe chạy được, **không** reset lặp.
-2. **Thử treo có chủ đích:** tạm thêm `for(;;){}` vào cuối `task_decision`, nạp, xem MCU
-   có reset trong ~333…767 ms và lần khởi động sau in `reset_by_wdg=1` không. **Gỡ bỏ
-   ngay sau khi thử.**
+2. **Thử treo có chủ đích:** tạm thêm `for(;;){}` vào cuối `task_decision`, nạp,
+   đo PB5 hạ khi phát hiện thiếu heartbeat; sau đó xác nhận reset IWDG và log
+   `reset_by_wdg=1`. Thử trên giá đỡ rồi **gỡ đoạn treo ngay sau phép đo**.
 3. Lặp lại với `task_sensor`.
 4. **Thử với `tLog`** — phải **KHÔNG** reset, vì nó không nằm trong `ALIVE_ALL_MASK`.
 5. Đo bằng oscilloscope: sau khi watchdog reset, **STBY phải xuống thấp trong vòng

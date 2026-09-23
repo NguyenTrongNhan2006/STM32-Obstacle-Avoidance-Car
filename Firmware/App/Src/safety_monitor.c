@@ -1,6 +1,7 @@
 #include "safety_monitor.h"
 #include "app_config.h"
 #include "button.h"
+#include "gpio.h"
 #include "sensor_manager.h"
 #include "watchdog.h"
 
@@ -18,6 +19,7 @@ EventGroupHandle_t egAlive;
 static StaticEventGroup_t safety_storage;
 static StaticEventGroup_t alive_storage;
 static uint32_t alive_window_ms;
+static bool tasks_alive;
 /* An unknown button state must never look like a release that arms the next
  * press, so the edge detector starts as if the button were already held.
  */
@@ -63,6 +65,7 @@ status_t safety_init(void)
         if (egAlive == NULL) { return STATUS_ERROR; }
     }
     alive_window_ms = 0U;
+    tasks_alive = false;
     /* A button that fails to initialise only removes the rearm path. The boot
      * inhibit stays latched, so the car still cannot run.
      */
@@ -76,12 +79,9 @@ void safety_check_in(EventBits_t task_bit)
     (void)xEventGroupSetBits(egAlive, task_bit);
 }
 
-/* DIEM DUY NHAT trong toan bo firmware duoc phep refresh watchdog, va chi khi
- * DA CHUNG MINH ca hai task duoc giam sat con chay trong cua so vua qua.
- *
- * Thieu bit thi khong lam gi ca — khong log, khong co gang cuu van. Chinh viec
- * KHONG refresh la hanh dong: IWDG het gio va reset MCU, dua STBY ve floating
- * de dien tro keo xuong 10k ngoai giu TB6612 o standby.
+/* Chi refresh watchdog khi ca hai task check-in. Neu thieu mot task, tSafety
+ * phai ha STBY ngay: tDecision co the dang treo va khong goi motor_apply nua.
+ * Bit loi giu nguyen cho den khi ca hai task khoe va nguoi dung rearm.
  */
 static void supervise_tasks(uint32_t now_ms)
 {
@@ -94,8 +94,14 @@ static void supervise_tasks(uint32_t now_ms)
     /* xEventGroupClearBits tra ve gia tri TRUOC khi xoa, nen doc va dat lai cua
      * so la mot thao tac nguyen tu — khong co khe de mat mot lan check-in. */
     checked_in = xEventGroupClearBits(egAlive, ALIVE_ALL_MASK);
-    if ((checked_in & ALIVE_ALL_MASK) == ALIVE_ALL_MASK) {
+    tasks_alive = (checked_in & ALIVE_ALL_MASK) == ALIVE_ALL_MASK;
+    if (tasks_alive) {
         (void)watchdog_refresh();
+    } else {
+        gpio_emergency_stop();
+        if (egSafety != NULL) {
+            (void)xEventGroupSetBits(egSafety, SAFETY_BIT_TASK_FAULT);
+        }
     }
 }
 
@@ -144,6 +150,7 @@ status_t safety_update(uint32_t now_ms)
                 EventBits_t clear = SAFETY_BIT_STOP;
                 if (range_ok && imu_ok) { clear |= SAFETY_BIT_SENSOR_FAULT; }
                 if (imu_ok && upright) { clear |= SAFETY_BIT_TILT_FAULT; }
+                if (tasks_alive) { clear |= SAFETY_BIT_TASK_FAULT; }
                 (void)xEventGroupClearBits(egSafety, clear);
             } else {
                 (void)xEventGroupSetBits(egSafety, SAFETY_BIT_STOP);
@@ -152,6 +159,11 @@ status_t safety_update(uint32_t now_ms)
         button_was_pressed = pressed;
     } else {
         button_was_pressed = true;
+    }
+    /* Safety owns the physical inhibit. A stalled Decision task must not be
+     * required to observe STOP, tilt, missing samples or a missed heartbeat. */
+    if ((xEventGroupGetBits(egSafety) & SAFETY_INHIBIT_MASK) != 0U) {
+        gpio_emergency_stop();
     }
     return STATUS_OK;
 }

@@ -1,5 +1,7 @@
 # Vai trò từng file và hợp đồng API
 
+> **Lưu ý 23/09/2026:** Bảng “Đã có/Cần tự làm” bên dưới là ảnh chụp giai đoạn skeleton, không còn phản ánh hết implementation hiện tại. Xem [CURRENT_STATUS.md](CURRENT_STATUS.md) và source code cho trạng thái mới; giữ bảng này để đối chiếu ownership Nhân/Hưng và các hợp đồng API ban đầu.
+
 ## Cấu trúc và chiều phụ thuộc
 
 ```text

@@ -32,6 +32,9 @@ jobs:
           chmod +x tools/check_constraints.sh Firmware/tools/check_constraints.sh
           ./tools/check_constraints.sh
 
+      - name: Host behavior tests
+        run: bash Firmware/tools/test_host.sh
+
       - name: Step 2 - Build Firmware (Release Preset -Os)
         run: |
           cd Firmware
