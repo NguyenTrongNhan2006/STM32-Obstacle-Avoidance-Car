@@ -4,7 +4,13 @@
 #include "motor_tb6612.h"
 typedef enum { CAR_IDLE, CAR_FORWARD, CAR_STOP, CAR_TURN_LEFT,
                CAR_TURN_RIGHT, CAR_CHECK, CAR_FAULT } car_state_t;
-typedef struct { car_state_t state; uint32_t entered_ms; uint8_t attempts; } avoidance_context_t;
+typedef struct {
+    car_state_t state;
+    uint32_t entered_ms;
+    uint8_t attempts;
+    int32_t integrated_yaw_mdeg;
+    uint32_t last_yaw_update_ms;
+} avoidance_context_t;
 /* Transitions implemented in obstacle_avoidance.c; guard-by-guard table in
  * docs/diagrams/fsm_control_flow.md.
  * IDLE -> FORWARD: deliberate START + safety clear + valid range.

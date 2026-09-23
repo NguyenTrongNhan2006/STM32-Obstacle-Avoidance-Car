@@ -10,6 +10,7 @@ uint8_t mpu6050_default_address(void);
 status_t mpu6050_init(const mpu6050_config_t *config);
 status_t mpu6050_read(imu_sample_t *sample);
 status_t mpu6050_calibrate(void);
+status_t mpu6050_calibrate_gyro(void);
 int16_t mpu6050_yaw_rate_dps(const imu_sample_t *sample);
 bool mpu6050_tilt_exceeded(const imu_sample_t *sample);
 #endif

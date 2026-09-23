@@ -39,7 +39,9 @@ status_t sensor_manager_init(void)
      * vi mot soi day long. safety_monitor da chot SAFETY_BIT_SENSOR_FAULT tu
      * luc boot nen xe van khong the chay, va sensor_manager_update() se thu
      * khoi tao lai theo chu ky. */
-    (void)mpu6050_init(&imu_sensor);
+    if (mpu6050_init(&imu_sensor) == STATUS_OK) {
+        (void)mpu6050_calibrate_gyro();
+    }
     imu_sampled_ms = 0U;
     imu_reinit_ms = 0U;
     if (qRangeMailbox == NULL) {
