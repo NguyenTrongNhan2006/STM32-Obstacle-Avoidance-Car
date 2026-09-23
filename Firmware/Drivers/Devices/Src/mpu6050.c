@@ -1,5 +1,6 @@
 #include "mpu6050.h"
 #include "board_config.h"
+#include "app_config.h"
 #include "i2c.h"
 #include "timebase.h"
 
@@ -191,4 +192,27 @@ status_t mpu6050_calibrate(void)
     gyro_bias[1] = (int16_t)(total[1] / (int32_t)MPU_CALIB_SAMPLES);
     gyro_bias[2] = (int16_t)(total[2] / (int32_t)MPU_CALIB_SAMPLES);
     return STATUS_OK;
+}
+
+int16_t mpu6050_yaw_rate_dps(const imu_sample_t *sample)
+{
+    if (sample == NULL || sample->status != SAMPLE_OK) { return 0; }
+    /* FS_SEL=0 (+-250 dps) -> 131 LSB/(deg/s) */
+    return (int16_t)(sample->gyro_raw[2] / 131);
+}
+
+bool mpu6050_tilt_exceeded(const imu_sample_t *sample)
+{
+    if (sample == NULL || sample->status != SAMPLE_OK) { return false; }
+    const int32_t ax = sample->accel_raw[0];
+    const int32_t ay = sample->accel_raw[1];
+    const int32_t az = sample->accel_raw[2];
+    uint64_t vertical;
+    uint64_t total;
+
+    if (az <= 0) { return true; }
+    vertical = (uint64_t)((int64_t)az * az);
+    total = vertical + (uint64_t)((int64_t)ax * ax) + (uint64_t)((int64_t)ay * ay);
+    if (total == 0U) { return true; }
+    return (vertical * TILT_COS2_DEN) < (total * TILT_COS2_NUM);
 }

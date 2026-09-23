@@ -42,7 +42,7 @@
  * length, not on this constant. Drop to 100000 first if the bus is unreliable;
  * a bus that only works at 100 kHz is a wiring finding, not a firmware setting.
  */
-#define IMU_I2C_SPEED_HZ 400000UL
+#define IMU_I2C_SPEED_HZ 100000UL
 #define BUTTON_PORT GPIOA
 #define BUTTON_PIN GPIO_PIN_8
 #define BUTTON_ACTIVE_LEVEL GPIO_PIN_RESET
