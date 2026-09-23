@@ -5,9 +5,15 @@
 #include "safety_monitor.h"
 #include "sensor_manager.h"
 #include "status_led.h"
+#include "buzzer.h"
 
 static avoidance_context_t avoidance;
 static bool safety_was_clear;
+
+car_state_t robot_car_get_state(void)
+{
+    return avoidance.state;
+}
 
 static uint8_t speed_for(motor_cmd_t command)
 {
@@ -32,10 +38,13 @@ static led_pattern_t pattern_for(car_state_t state)
 status_t robot_car_init(void)
 {
     const motor_config_t config = { .is_safe = safety_is_clear_to_run };
+    const buzzer_config_t buzzer_cfg = { .active_high = true };
+
     if (safety_init() != STATUS_OK || sensor_manager_init() != STATUS_OK ||
         obstacle_avoidance_init(&avoidance) != STATUS_OK) { return STATUS_ERROR; }
     safety_was_clear = false;
     (void)status_led_init();
+    (void)buzzer_init(&buzzer_cfg);
     return motor_init(&config);
 }
 

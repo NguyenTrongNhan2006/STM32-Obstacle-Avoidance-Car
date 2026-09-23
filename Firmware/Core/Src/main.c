@@ -11,6 +11,8 @@
 #include "robot_car.h"
 #include "safety_monitor.h"
 #include "sensor_manager.h"
+#include "status_led.h"
+#include "buzzer.h"
 
 volatile uint32_t g_assert_line;
 const char * volatile g_assert_file;
@@ -112,17 +114,99 @@ static void task_decision(void *argument)
         vTaskDelayUntil(&wake, pdMS_TO_TICKS(TASK_DECISION_PERIOD_MS));
     }
 }
+static void telemetry_send(uint32_t now_ms)
+{
+    sample_t range;
+    imu_sample_t imu;
+    car_state_t state = robot_car_get_state();
+    bool safe = safety_is_clear_to_run();
+    char buf[64];
+    size_t pos = 0;
+
+    static const char * const state_str[] = {
+        "IDLE", "FWD ", "STOP", "LEFT", "RGHT", "CHCK", "FLT "
+    };
+    const char *st_name = ((unsigned)state <= (unsigned)CAR_FAULT) ? state_str[state] : "UNKN";
+
+    uint32_t dist_mm = 0U;
+    if (sensor_manager_get_latest(&range, &imu) == STATUS_OK && range.status == SAMPLE_OK) {
+        dist_mm = range.value;
+    }
+
+    /* Build telemetry line: "TLM: <STATE> | D=<dist>mm | SAFE=<0/1>\r\n" using custom formatter */
+    const char prefix[] = "TLM: ";
+    for (size_t i = 0; prefix[i] != '\0'; ++i) { buf[pos++] = prefix[i]; }
+    for (size_t i = 0; st_name[i] != '\0'; ++i) { buf[pos++] = st_name[i]; }
+
+    const char mid1[] = " | D=";
+    for (size_t i = 0; mid1[i] != '\0'; ++i) { buf[pos++] = mid1[i]; }
+
+    char digits[10];
+    size_t d_count = 0;
+    uint32_t val = dist_mm;
+    do { digits[d_count++] = (char)('0' + (val % 10U)); val /= 10U; } while (val != 0U);
+    for (size_t i = 0; i < d_count; ++i) { buf[pos++] = digits[d_count - 1U - i]; }
+
+    const char mid2[] = "mm | SAFE=";
+    for (size_t i = 0; mid2[i] != '\0'; ++i) { buf[pos++] = mid2[i]; }
+    buf[pos++] = safe ? '1' : '0';
+
+    buf[pos++] = '\r';
+    buf[pos++] = '\n';
+
+    (void)uart_debug_write((const uint8_t *)buf, pos, UART_TIMEOUT_MS);
+    (void)now_ms;
+}
+
 static void task_log(void *argument)
 {
+    TickType_t wake = xTaskGetTickCount();
     (void)argument;
-    /* IMPLEMENT (Hung): bounded telemetry; sole runtime UART writer. */
-    for (;;) { vTaskDelay(pdMS_TO_TICKS(TASK_LOG_PERIOD_MS)); }
+    /* task_log / telemetry: transmits bounded non-blocking telemetry over USART1. */
+    for (;;) {
+        telemetry_send(timebase_now_ms());
+        vTaskDelayUntil(&wake, pdMS_TO_TICKS(TASK_LOG_PERIOD_MS));
+    }
 }
+
 static void task_buzzer(void *argument)
 {
+    TickType_t wake = xTaskGetTickCount();
     (void)argument;
-    /* IMPLEMENT (Hung): deadline-based patterns; must block/yield at priority 0. */
-    for (;;) { vTaskDelay(pdMS_TO_TICKS(TASK_BUZZER_PERIOD_MS)); }
+
+    /* task_ui / task_buzzer: manages audio/visual feedback (buzzer & status LED),
+     * driven by system safety inhibits and obstacle proximity.
+     */
+    for (;;) {
+        uint32_t now_ms = timebase_now_ms();
+        bool safe = safety_is_clear_to_run();
+
+        if (!safe) {
+            EventBits_t bits = (egSafety != NULL) ? xEventGroupGetBits(egSafety) : 0U;
+            if ((bits & (SAFETY_BIT_SENSOR_FAULT | SAFETY_BIT_TILT_FAULT)) != 0U) {
+                (void)buzzer_set(BUZZER_FAULT);
+                (void)status_led_set(LED_FAULT);
+            } else {
+                (void)buzzer_set(BUZZER_SILENT);
+                (void)status_led_set(LED_IDLE);
+            }
+        } else {
+            car_state_t st = robot_car_get_state();
+            if (st == CAR_STOP || st == CAR_TURN_LEFT || st == CAR_TURN_RIGHT) {
+                (void)buzzer_set(BUZZER_OBSTACLE);
+                (void)status_led_set(LED_RUNNING);
+            } else if (st == CAR_FORWARD) {
+                (void)buzzer_set(BUZZER_SILENT);
+                (void)status_led_set(LED_RUNNING);
+            } else {
+                (void)buzzer_set(BUZZER_SILENT);
+                (void)status_led_set(LED_IDLE);
+            }
+        }
+
+        (void)buzzer_update(now_ms);
+        vTaskDelayUntil(&wake, pdMS_TO_TICKS(20U));
+    }
 }
 int main(void)
 {
