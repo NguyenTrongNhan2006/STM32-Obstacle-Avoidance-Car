@@ -67,6 +67,8 @@ add_library(stm32_hal STATIC
   ${TP}/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_rcc.c
   ${TP}/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_rcc_ex.c
   ${TP}/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_uart.c
+  ${TP}/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_tim.c
+  ${TP}/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_tim_ex.c
 )
 target_include_directories(stm32_hal SYSTEM PUBLIC
   ${TP}/CMSIS/Core/Include
