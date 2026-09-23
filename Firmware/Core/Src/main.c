@@ -9,6 +9,8 @@
 #include "timebase.h"
 #include "uart_debug.h"
 #include "robot_car.h"
+#include "safety_monitor.h"
+#include "sensor_manager.h"
 
 volatile uint32_t g_assert_line;
 const char * volatile g_assert_file;
@@ -76,21 +78,39 @@ void SystemClock_Config(void)
 }
 static void task_safety(void *argument)
 {
+    TickType_t wake = xTaskGetTickCount();
     (void)argument;
-    /* IMPLEMENT (Nhan): STOP/fault latch and freshness. No motor activation yet. */
-    for (;;) { vTaskDelay(pdMS_TO_TICKS(TASK_SAFETY_PERIOD_MS)); }
+    /* safety_update runs the fault-latch / freshness / tilt / rearm policy.
+     * Period starts at TASK_SAFETY_PERIOD_MS; target 10 ms after measurement.
+     */
+    for (;;) {
+        (void)safety_update(timebase_now_ms());
+        vTaskDelayUntil(&wake, pdMS_TO_TICKS(TASK_SAFETY_PERIOD_MS));
+    }
 }
 static void task_sensor(void *argument)
 {
+    TickType_t wake = xTaskGetTickCount();
     (void)argument;
-    /* IMPLEMENT (Hung): independent sample deadlines and copied mailboxes. */
-    for (;;) { vTaskDelay(pdMS_TO_TICKS(TASK_SENSOR_PERIOD_MS)); }
+    /* task_sensor runs sensor_manager_update periodically.
+     * Uses 10 ms period to service range acquisition deadlines and IMU.
+     */
+    for (;;) {
+        (void)sensor_manager_update(timebase_now_ms());
+        vTaskDelayUntil(&wake, pdMS_TO_TICKS(10U));
+    }
 }
 static void task_decision(void *argument)
 {
+    TickType_t wake = xTaskGetTickCount();
     (void)argument;
-    /* IMPLEMENT (Nhan): nonblocking FSM and robot_car_update. */
-    for (;;) { vTaskDelay(pdMS_TO_TICKS(TASK_DECISION_PERIOD_MS)); }
+    /* robot_car_update is the sole caller of motor_apply.
+     * Period starts at TASK_DECISION_PERIOD_MS; target 20 ms after measurement.
+     */
+    for (;;) {
+        (void)robot_car_update(timebase_now_ms());
+        vTaskDelayUntil(&wake, pdMS_TO_TICKS(TASK_DECISION_PERIOD_MS));
+    }
 }
 static void task_log(void *argument)
 {
@@ -125,10 +145,10 @@ int main(void)
     SystemClock_Config();
     configASSERT(timebase_init(&time_config) == STATUS_OK);
     configASSERT(uart_debug_init(&uart_config) == STATUS_OK);
-    /* Current device stub intentionally reports NOT_READY, but static App objects exist. */
+    /* Motor and PWM are now implemented; sensor drivers still return NOT_READY. */
     app_status = robot_car_init();
     configASSERT(app_status == STATUS_OK || app_status == STATUS_NOT_READY);
-    (void)uart_log("Skeleton: motor disabled, algorithms TODO\r\n");
+    (void)uart_log("Boot: PWM/motor ready, sensors TODO\r\n");
     for (uint32_t index = 0U; index < APP_TASK_COUNT; ++index) {
         configASSERT(xTaskCreateStatic(functions[index], names[index], APP_TASK_STACK_WORDS,
                      NULL, priorities[index], task_stacks[index], &task_controls[index]) != NULL);

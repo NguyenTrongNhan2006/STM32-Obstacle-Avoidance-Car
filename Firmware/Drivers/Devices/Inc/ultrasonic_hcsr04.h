@@ -5,4 +5,5 @@ typedef struct { uint32_t echo_timeout_us; uint32_t sample_period_ms; } ultrason
 status_t ultrasonic_init(const ultrasonic_config_t *config);
 status_t ultrasonic_request(void);
 status_t ultrasonic_read(sample_t *sample);
+void ultrasonic_capture_isr(void);
 #endif

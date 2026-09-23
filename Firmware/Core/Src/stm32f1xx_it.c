@@ -2,6 +2,7 @@
 #include "stm32f1xx_hal.h"
 #include "FreeRTOS.h"
 #include "task.h"
+#include "ultrasonic_hcsr04.h"
 void xPortSysTickHandler(void);
 void SysTick_Handler(void)
 {
@@ -50,7 +51,10 @@ UNIMPLEMENTED_IRQ(TIM1_BRK_IRQHandler)
 UNIMPLEMENTED_IRQ(TIM1_UP_IRQHandler)
 UNIMPLEMENTED_IRQ(TIM1_TRG_COM_IRQHandler)
 UNIMPLEMENTED_IRQ(TIM1_CC_IRQHandler)
-UNIMPLEMENTED_IRQ(TIM2_IRQHandler)
+void TIM2_IRQHandler(void)
+{
+    ultrasonic_capture_isr();
+}
 UNIMPLEMENTED_IRQ(TIM3_IRQHandler)
 UNIMPLEMENTED_IRQ(TIM4_IRQHandler)
 UNIMPLEMENTED_IRQ(I2C1_EV_IRQHandler)
