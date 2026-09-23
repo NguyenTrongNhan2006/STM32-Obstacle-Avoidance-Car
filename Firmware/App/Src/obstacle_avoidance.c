@@ -6,6 +6,8 @@ static void enter_state(avoidance_context_t *context, car_state_t state, uint32_
 {
     context->state = state;
     context->entered_ms = now_ms;
+    context->integrated_yaw_mdeg = 0;
+    context->last_yaw_update_ms = now_ms;
 }
 
 /* There are no side sensors, so a heading is a trial rather than a measured
@@ -34,8 +36,6 @@ status_t obstacle_avoidance_update(avoidance_context_t *context, const sample_t 
     if (request == NULL) { return STATUS_ERROR; }
     *request = MOTOR_STOP;
     if (context == NULL || range == NULL || imu == NULL) { return STATUS_ERROR; }
-    /* Tilt policy belongs to safety_monitor, which owns the inhibit bits. */
-    (void)imu;
 
     /* FAULT is terminal here. Only a deliberate rearm, applied by robot_car
      * re-initialising this context after the safety owner clears the inhibit,
@@ -87,13 +87,46 @@ status_t obstacle_avoidance_update(avoidance_context_t *context, const sample_t 
         break;
 
     case CAR_TURN_LEFT:
-    case CAR_TURN_RIGHT:
-        if (in_state_ms >= T_TURN_MS) {
+    case CAR_TURN_RIGHT: {
+        bool turn_complete = false;
+        const uint32_t dt_ms = now_ms - context->last_yaw_update_ms;
+        context->last_yaw_update_ms = now_ms;
+
+        if (imu->status == SAMPLE_OK) {
+            /* Closed-loop yaw turn: gyro_raw[2] sensitivity = 131 LSB / (deg/s) */
+            const int32_t rate_mdeg_s = ((int32_t)imu->gyro_raw[2] * 1000) / 131;
+            const int32_t delta_mdeg = (rate_mdeg_s * (int32_t)dt_ms) / 1000;
+
+            if (context->state == CAR_TURN_LEFT) {
+                context->integrated_yaw_mdeg += delta_mdeg;
+                if (context->integrated_yaw_mdeg >= (int32_t)YAW_TURN_TARGET_MDEG) {
+                    turn_complete = true;
+                }
+            } else {
+                context->integrated_yaw_mdeg -= delta_mdeg;
+                if (context->integrated_yaw_mdeg >= (int32_t)YAW_TURN_TARGET_MDEG) {
+                    turn_complete = true;
+                }
+            }
+
+            /* Safety timeout in case of wheel slip or mechanical stall */
+            if (in_state_ms >= T_TURN_TIMEOUT_MS) {
+                turn_complete = true;
+            }
+        } else {
+            /* Fallback to open-loop duration if IMU sample is unavailable */
+            if (in_state_ms >= T_TURN_MS) {
+                turn_complete = true;
+            }
+        }
+
+        if (turn_complete) {
             enter_state(context, CAR_CHECK, now_ms);
         } else {
             *request = (context->state == CAR_TURN_LEFT) ? MOTOR_TURN_LEFT : MOTOR_TURN_RIGHT;
         }
         break;
+    }
 
     case CAR_CHECK: {
         /* Only accept a sample acquired after entering CHECK. A reading taken
