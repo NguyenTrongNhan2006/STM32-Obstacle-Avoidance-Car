@@ -15,7 +15,7 @@
 
 | Hạng mục | Trạng thái / bằng chứng cần có |
 | --- | --- |
-| Cầu H, motor, nguồn | Đã chọn **2 motor TT 1:48 kèm bánh, không encoder** cho xe nhỏ; xem [BOM tiết kiệm](PROJECT_PLAN.md). TB6612FNG là phương án driver đang có trong code, chưa xác nhận đã mua hoặc chịu được dòng motor thật. Pin, bộ ổn áp và chassis chưa chốt. Trước khi đấu motor, xác nhận dòng (kể cả khi kẹt), điện áp nguồn, cực tính và STBY pull-down ngoài. |
+| Cầu H, motor, nguồn | Đã chọn trên giấy **2 motor TT 1:48 kèm bánh, không encoder** và **4 pin AA kiềm Philips LR6P4B/97 nối tiếp** cho bản thử đầu; xem [BOM và đường nguồn](PROJECT_PLAN.md). TB6612FNG là phương án driver đang có trong code. Chưa xác nhận đã mua pin, module cầu H, ổn áp 5 V và chassis, hoặc dòng motor thật; giữ motor tắt đến khi đo dòng, kiểm tra nguồn, cực tính và STBY pull-down ngoài. |
 | Encoder | Chưa có driver, pinout hay điều khiển tốc độ dùng encoder. PWM hiện là hở vòng; quay theo góc dùng gyro MPU6050. Encoder để sau phiên bản 1. |
 | HC-SR04 Echo | PA0 cần hạ mức 5 V xuống 3,3 V. Đo xung Trigger/Echo, timeout và khoảng cách với vật ở nhiều bề mặt. Main chưa có lọc median. |
 | Hiệu chuẩn IMU | Xác nhận module/AD0, data-ready, thời gian ổn định sau wake, hướng trục và bias qua nhiều lần khởi động. Host test chỉ mô phỏng thanh ghi, chưa chứng minh cảm biến thật. |
@@ -27,7 +27,7 @@
 
 | Mốc | Nhân | Hưng | Cổng chung |
 | --- | --- | --- | --- |
-| Đến 26/09 | Review safety latch/cắt STBY, host test treo Decision; xác nhận mã motor TT, module cầu H và dòng phù hợp | Review hiệu chuẩn IMU 64 mẫu, data-ready; kiểm tra module MPU/HC-SR04 và sơ đồ nguồn | Chốt phần còn thiếu của BOM (pin, ổn áp, chassis) cùng kịch bản thử trên giá đỡ; CI xanh |
+| Đến 26/09 | Review safety latch/cắt STBY, host test treo Decision; xác nhận mã motor TT, module cầu H và dòng phù hợp | Review hiệu chuẩn IMU 64 mẫu, data-ready; kiểm tra module MPU/HC-SR04 và sơ đồ 4 AA → 5 V logic | Xác nhận pin/hộp, ổn áp, chassis thực có và kịch bản thử trên giá đỡ; CI xanh |
 | 27/09–03/10 | Bring-up clock/SWD, đo GPIO/PWM và reset/STBY trên board; đo độ trễ STOP | Đo I2C, Echo, telemetry số có dấu và pattern buzzer; ghi log khi lỗi bus/cảm biến | Có số đo, không chỉ bản build; cập nhật pinout, BOM và ngưỡng `[DO]` |
 | 04–10/10 | Kiểm tra 5 task, stack và đường fault/rearm | Kiểm tra range/tilt/gyro khi motor gây nhiễu | Review chéo trước khi thử xe chạy |
 
