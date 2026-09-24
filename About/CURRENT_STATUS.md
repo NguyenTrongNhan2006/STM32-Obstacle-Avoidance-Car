@@ -1,4 +1,4 @@
-# Trạng thái triển khai và việc tiếp theo — 23/09/2026
+# Trạng thái triển khai và việc tiếp theo — 25/09/2026
 
 **Nhân + Hưng · 20/09–20/12/2026.** Tài liệu này ghi trạng thái code hiện tại; [timeline](TEAM_TIMELINE.md) vẫn là kế hoạch theo tuần. Số liệu từ build và kiểm thử trên máy chưa thay cho đo trên board.
 
@@ -15,7 +15,7 @@
 
 | Hạng mục | Trạng thái / bằng chứng cần có |
 | --- | --- |
-| Cầu H, motor, nguồn | Đã chọn **TB6612FNG cho bản đầu** theo [điều kiện trong kế hoạch](PROJECT_PLAN.md#quyết-định-cầu-h-và-điều-kiện-lắp); chưa xác nhận module/motor/nguồn thực tế. Trước khi đấu motor, đo dòng motor (kể cả dòng kẹt), kiểm tra nguồn, cực tính và STBY pull-down ngoài. |
+| Cầu H, motor, nguồn | Đã chọn **2 motor TT 1:48 kèm bánh, không encoder** cho xe nhỏ; xem [BOM tiết kiệm](PROJECT_PLAN.md). TB6612FNG là phương án driver đang có trong code, chưa xác nhận đã mua hoặc chịu được dòng motor thật. Pin, bộ ổn áp và chassis chưa chốt. Trước khi đấu motor, xác nhận dòng (kể cả khi kẹt), điện áp nguồn, cực tính và STBY pull-down ngoài. |
 | Encoder | Chưa có driver, pinout hay điều khiển tốc độ dùng encoder. PWM hiện là hở vòng; quay theo góc dùng gyro MPU6050. Encoder để sau phiên bản 1. |
 | HC-SR04 Echo | PA0 cần hạ mức 5 V xuống 3,3 V. Đo xung Trigger/Echo, timeout và khoảng cách với vật ở nhiều bề mặt. Main chưa có lọc median. |
 | Hiệu chuẩn IMU | Xác nhận module/AD0, data-ready, thời gian ổn định sau wake, hướng trục và bias qua nhiều lần khởi động. Host test chỉ mô phỏng thanh ghi, chưa chứng minh cảm biến thật. |
@@ -27,7 +27,7 @@
 
 | Mốc | Nhân | Hưng | Cổng chung |
 | --- | --- | --- | --- |
-| Đến 26/09 | Review safety latch/cắt STBY, host test treo Decision; kiểm tra cầu H và sơ đồ nguồn | Review hiệu chuẩn IMU 64 mẫu, data-ready; kiểm tra module MPU/HC-SR04 thực có | Chốt danh sách linh kiện và kịch bản thử trên giá đỡ; CI xanh |
+| Đến 26/09 | Review safety latch/cắt STBY, host test treo Decision; xác nhận mã motor TT, module cầu H và dòng phù hợp | Review hiệu chuẩn IMU 64 mẫu, data-ready; kiểm tra module MPU/HC-SR04 và sơ đồ nguồn | Chốt phần còn thiếu của BOM (pin, ổn áp, chassis) cùng kịch bản thử trên giá đỡ; CI xanh |
 | 27/09–03/10 | Bring-up clock/SWD, đo GPIO/PWM và reset/STBY trên board; đo độ trễ STOP | Đo I2C, Echo, telemetry số có dấu và pattern buzzer; ghi log khi lỗi bus/cảm biến | Có số đo, không chỉ bản build; cập nhật pinout, BOM và ngưỡng `[DO]` |
 | 04–10/10 | Kiểm tra 5 task, stack và đường fault/rearm | Kiểm tra range/tilt/gyro khi motor gây nhiễu | Review chéo trước khi thử xe chạy |
 
