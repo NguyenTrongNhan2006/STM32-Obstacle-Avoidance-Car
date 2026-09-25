@@ -14,8 +14,8 @@ Xe tốc độ thấp tự chạy trong khu thử có kiểm soát, phát hiện
 | Khoảng cách trước | Tạm HC-SR04 từ mô tả “HR-04” | Hưng: ảnh nhãn, điện áp và khoảng đo hợp lệ |
 | IMU | MPU6050 gắn cứng trên xe | Hưng: mã module, nguồn/pull-up I2C, hướng trục và AD0 |
 | Cầu H | **Chọn TB6612FNG hai kênh cho bản đầu**; chưa xác nhận module đã mua hoặc phù hợp motor thực tế | Nhân: xác nhận module, điện áp và dòng motor; Hưng: review sơ đồ đấu nối và thử STOP |
-| Motor, bánh, chassis | **Chọn cho bản xe nhỏ: 2 motor TT giảm tốc 1:48 kèm bánh 65 mm, không encoder**; khung/bánh tự do chưa chốt | Nhân xác nhận mã motor và đo điện áp/dòng; Hưng kiểm tra tải xe, bánh và kết quả thử |
-| Buzzer | Đề xuất active qua transistor | Hưng xác nhận active/passive, dòng/điện áp; thêm bảo vệ phù hợp tải |
+| Motor, bánh, chassis | **Chọn trên giấy: 2 motor TT giảm tốc 1:48 kèm bánh 65 mm, không encoder; khung mica 2WD tương thích gá TT, kèm bánh tự do và ốc lắp** | Nhân xác nhận mã motor, khung thực nhận và đo điện áp/dòng; Hưng kiểm tra tải xe, bánh và kết quả thử |
+| Buzzer | Chọn buzzer active loại nhỏ, kích qua transistor phù hợp dòng/điện áp thực tế | Hưng xác nhận mã, dòng/điện áp và mạch kích trước khi lắp |
 | Nguồn | **Chọn cho bản thử đầu: 4 pin AA kiềm 1,5 V Philips LR6P4B/97 mắc nối tiếp** trong hộp 4 AA có công tắc; module ổn áp 5 V chưa xác nhận mua | Nhân đo điện áp/dòng pin khi motor chạy; Hưng kiểm tra đường 5 V logic, nối GND chung và sụt áp |
 | Nút, LED, debug | START/STOP, LED board, USB-UART 3.3 V, ST-Link | Nhân bring-up; Hưng kiểm thử |
 
@@ -37,6 +37,24 @@ Hai động cơ DC trong bản đầu **không đọc encoder**: PWM là điều
 - **Phân phối nguồn dự kiến:** sau công tắc, nhánh pin cấp trực tiếp vào VM của TB6612FNG cho hai motor TT **đúng mẫu đã xác nhận dải 3–9 V**; nhánh còn lại qua mạch [buck-boost DSN6000AUD](https://hshop.vn/mach-on-ap-dc-dc-automatic-buck-boost-dsn6000aud) chỉnh và đo đúng 5,0 V **trước khi nối board**, cấp cho chân 5 V của Blue Pill và VCC của HC-SR04. Từ 3,3 V logic trên board cấp TB6612 VCC và MPU6050 nếu module thực cho phép; mọi GND nối chung. Không cấp điện áp pin thô vào chân 5 V/3,3 V của STM32, và không lấy 5 V logic để cấp motor. DSN6000AUD chỉ dự kiến nuôi logic/cảm biến, chưa chứng minh chịu được dòng motor.
 - **Kiểm tra trước khi chạy:** Nhân thử hai motor trên giá đỡ bằng nguồn giới hạn dòng ở 5–6 V, đo dòng lúc khởi động và tải, rồi xác nhận dòng TB6612FNG trước khi thử 4 AA trên xe. Pin AA mới có thể cao hơn 6,0 V; đo điện áp thực và dừng thử nếu motor/bridge nóng hoặc nguồn logic sụt khiến MCU reset. Hưng kiểm tra đầu ra 5 V khi motor bật/tắt, Echo xuống 3,3 V và đường STOP. Nếu thay motor TT chỉ định 3–6 V hoặc đổi sang pin 2S, phải xem lại đường VM; **không áp dụng nguyên sơ đồ này**.
 - **Cổng chốt linh kiện (Nhân + Hưng):** ghi mã motor/module/pin, điện áp thực, dòng không tải và khi tải; kiểm tra tình huống bánh kẹt bằng dữ liệu đúng motor hoặc phép đo xung ngắn có giới hạn dòng, không giữ bánh kẹt lâu. Hưng đối chiếu nguồn, Echo 5 V và STOP; Nhân xác nhận dòng cầu H, cực tính, PWM duty 0 và STBY khi reset. Chỉ đánh dấu “đã lắp” sau khi có sơ đồ rev A và log thử.
+
+### Danh sách mua để lắp bản xe đầu — 25/09/2026
+
+Danh sách này là **lựa chọn thiết kế**, không xác nhận hai bạn đã sở hữu hay đã đặt hàng. Kiểm kê đồ đang có trước khi mua; giá dưới đây chỉ là tham khảo tại ngày ghi, không gồm vận chuyển. Không đưa cảm biến trái/phải, encoder, servo, wireless hay pin 18650 vào bản đầu.
+
+| Số lượng | Linh kiện chốt / quy cách mua | Mục đích và điều kiện kiểm tra |
+| --- | --- | --- |
+| 2 bộ | [Motor TT 1:48 kèm bánh 65 mm](https://hshop.vn/bo-dong-co-dc-giam-toc-tt-motor-kem-banh-xe-nhua-65mm), đúng mẫu ghi 3–9 V; khoảng 35.000đ/bộ | Hai bánh chủ động; xác nhận mã, chiều quay và dòng thực tế trước khi chạy qua TB6612FNG. |
+| 1 | [Khung mica 2WD](https://dientutuyetnga.com/products/khung-xe-robot-2wd) tương thích gá motor TT; giá tham khảo 65.000đ | Xác nhận với nơi bán khung có đủ bánh tự do, gá motor, ốc/trụ và diện tích để đặt hộp 4 AA, Blue Pill, nguồn, cảm biến. Mua thêm phần thiếu, không mua trùng motor/bánh. |
+| 1 vỉ + 1 hộp | 4 viên [AA alkaline Philips LR6P4B/97](https://www.dienmayxanh.com/pin/pin-aa-4-vien-alkaline-philips-lr6p4b) + hộp 4 AA **nối tiếp có công tắc** | Nguồn bản thử đầu; không phải hộp 18650, pin than hoặc pin sạc. |
+| 1 | [TB6612FNG hai kênh có STBY](https://hshop.vn/mach-dieu-khien-dong-co-dc-tb6612fng-dc-motor-driver); khoảng 45.000đ | Khớp driver hiện tại. Dòng motor thật phải phù hợp giới hạn điện và nhiệt của module; chưa được chứng minh. |
+| 1 | [DSN6000AUD buck-boost](https://hshop.vn/mach-on-ap-dc-dc-automatic-buck-boost-dsn6000aud); khoảng 35.000đ | Chỉ cấp nhánh logic/cảm biến. Chỉnh, đo 5,0 V trước khi nối board; thử lại khi motor khởi động. |
+| 1 mỗi loại | [STM32F103C8T6 Blue Pill](https://hshop.vn/Kit-phat-trien-STM32F103C8T6-Blue-Pill), [HC-SR04](https://hshop.vn/cam-bien-sieu-am-srf04) (khoảng 27.000đ), module MPU6050 GY-521 | Xác nhận Blue Pill thực tế, mã MPU6050, điện áp cấp và mức pull-up I2C. Echo HC-SR04 phải hạ xuống 3,3 V. |
+| 1 bộ | Buzzer active loại nhỏ, transistor kích tương ứng; nút START/STOP; điện trở 10 kΩ + 20 kΩ cho cầu chia áp Echo, thêm 10 kΩ kéo STBY xuống GND; nếu module MPU không có sẵn thì thêm 2 điện trở I2C pull-up 4,7 kΩ lên 3,3 V | Chọn điện áp/dòng buzzer theo module thực tế; kiểm tra Echo, STBY và mức I2C trên mạch thật. |
+| 1 bộ | Dây nối, dây motor, đầu nối, board đục lỗ nhỏ, ốc/trụ M3; đồng hồ đo điện | Đấu nối chắc chắn, ghi cực nguồn; đồng hồ là dụng cụ dùng chung, không gắn lên xe. |
+| 1 mỗi loại, dùng chung | [ST-Link V2](https://hshop.vn/mach-nap-st-link-v2), USB–UART mức 3,3 V | Nạp/debug và đọc log; không cần gắn cố định lên xe. |
+
+**Thứ tự mua:** (1) khung, hộp pin, TB6612FNG và DSN6000AUD cùng các món cốt lõi còn thiếu; (2) vật tư đấu nối và dụng cụ dùng chung. Trước khi đặt khung, xác nhận nó vừa **đúng hai bộ TT 65 mm đã chọn** và hộp 4 AA. Nhân xác nhận motor/cầu H và đo dòng; Hưng xác nhận 5 V logic, Echo 3,3 V, buzzer và STOP. Chỉ chuyển trạng thái từ “chọn trên giấy” sang “đã lắp” khi có mã linh kiện, ảnh/sơ đồ rev A và log đo trên giá đỡ.
 
 ## Pinout dự kiến — đồng bộ board_config.h
 
